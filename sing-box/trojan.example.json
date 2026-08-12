@@ -1,0 +1,32 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "inbounds": [
+    {
+      "type": "trojan",
+      "tag": "trojan-in",
+      "listen": "0.0.0.0",
+      "listen_port": 8443,
+      "users": [
+        {
+          "name": "personal",
+          "password": "${TROJAN_PASSWORD}"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "${EDGE_DOMAIN}",
+        "certificate_path": "/etc/letsencrypt/live/${EDGE_DOMAIN}/fullchain.pem",
+        "key_path": "/etc/letsencrypt/live/${EDGE_DOMAIN}/privkey.pem"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}

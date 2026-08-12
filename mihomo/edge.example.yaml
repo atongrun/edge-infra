@@ -1,0 +1,78 @@
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: false
+
+profile:
+  store-selected: true
+
+proxies:
+  - name: Edge-HY2
+    type: hysteria2
+    server: ${EDGE_DOMAIN}
+    port: 443
+    password: ${HY2_PASSWORD}
+    sni: ${EDGE_DOMAIN}
+    alpn: [h3]
+    udp: true
+    disable-mtu-discovery: true
+
+  - name: Edge-HY2-Hop
+    type: hysteria2
+    server: ${EDGE_DOMAIN}
+    port: 443
+    ports: 20000-20031
+    hop-interval: 20
+    password: ${HY2_PASSWORD}
+    sni: ${EDGE_DOMAIN}
+    alpn: [h3]
+    udp: true
+    disable-mtu-discovery: true
+
+  - name: Edge-Trojan
+    type: trojan
+    server: ${EDGE_DOMAIN}
+    port: 8443
+    password: ${TROJAN_PASSWORD}
+    sni: ${EDGE_DOMAIN}
+    alpn: [http/1.1]
+    udp: true
+    skip-cert-verify: false
+
+proxy-groups:
+  - name: PROXY
+    type: fallback
+    proxies: [Edge-HY2, Edge-HY2-Hop, Edge-Trojan]
+    url: https://www.gstatic.com/generate_204
+    interval: 60
+    timeout: 5000
+    max-failed-times: 2
+    lazy: false
+    expected-status: 204
+
+  - name: Proxies
+    type: select
+    proxies: [PROXY, DIRECT]
+
+  - name: OpenAI
+    type: select
+    proxies: [PROXY]
+
+rules:
+  - DOMAIN-SUFFIX,openai.com,OpenAI
+  - DOMAIN-SUFFIX,chatgpt.com,OpenAI
+  - DOMAIN-SUFFIX,anthropic.com,PROXY
+  - DOMAIN-SUFFIX,claude.ai,PROXY
+  - DOMAIN-SUFFIX,github.com,PROXY
+  - DOMAIN-SUFFIX,githubusercontent.com,PROXY
+  - DOMAIN-SUFFIX,npmjs.org,PROXY
+  - DOMAIN-SUFFIX,pypi.org,PROXY
+  - DOMAIN-SUFFIX,docker.com,PROXY
+  - DOMAIN-SUFFIX,docker.io,PROXY
+  - DOMAIN-SUFFIX,x.com,PROXY
+  - DOMAIN-SUFFIX,twitter.com,PROXY
+  - DOMAIN-SUFFIX,t.me,PROXY
+  - DOMAIN-SUFFIX,telegram.org,PROXY
+  - GEOIP,CN,DIRECT
+  - MATCH,PROXY
