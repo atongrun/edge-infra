@@ -1,17 +1,35 @@
-# Architecture
+# Architecture and ownership
+
+## Data plane
 
 ```text
-Mihomo fallback
-  1. HY2          UDP 443
-  2. HY2-Hop      UDP 20000-20031 -> UDP 443
-  3. Trojan/TLS   TCP 8443
-
-Subscription      nginx TCP 443
-Administration    SSH current port
+Edge-HY2       UDP 443          primary
+Edge-HY2-Hop   UDP range        nft redirect -> UDP 443
+Edge-Trojan    TCP 8443         independent TCP/TLS fallback
+Subscription   TCP 443          nginx static YAML
+ACME           TCP 80           Certbot webroot + HTTPS redirect
 ```
 
-HY2 与 HY2-Hop 属于同一 UDP/QUIC 故障域。Port Hopping 只用于规避针对固定 UDP 端口或流的限制，不能替代异构 TCP fallback。Trojan 使用独立配置、独立 sing-box 实例和独立 systemd unit；它不修改主 HY2 inbound。
+Mihomo uses a `fallback` group ordered as `Edge-HY2`, `Edge-HY2-Hop`, then `Edge-Trojan`. Health selection affects new connections; established connections do not migrate seamlessly.
 
-端口跳跃使用独立 nftables table，由独立 oneshot service 管理。它不会 flush 全局 ruleset，也不给 sing-box 增加 `CAP_NET_ADMIN`。
+HY2 and HY2-Hop remain in the same UDP/QUIC failure domain. Port hopping can work around fixed-port or flow treatment, but Trojan/TLS is the actual heterogeneous fallback.
 
-Mihomo fallback 的健康检查只影响新连接；已经建立的连接不会无缝迁移。客户端的 `profile.store-selected` 可能保留同名组的选择状态，诊断时要区分缓存选择与实时健康状态。
+## Failure isolation
+
+- `edge-infra-hy2.service` owns only the primary sing-box config.
+- `edge-infra-trojan.service` owns only the Trojan config.
+- `edge-infra-port-hopping.service` owns only `table inet edge_infra_hy2_hopping`.
+- nginx owns TCP 80/443 and the static subscription.
+- Certbot uses nginx's webroot and a deploy hook that validates before reload/restart.
+
+The sing-box processes never receive `CAP_NET_ADMIN`. The installer does not enable `nftables.service` and never runs `flush ruleset`.
+
+## State and trust boundaries
+
+- Public input: domains, public IPv4, ACME email and optional ports/interface.
+- Generated secret state: `/etc/edge-infra/secrets.env` (`0600`).
+- Transaction state: `/var/lib/edge-infra/state.env` (`0600`).
+- Immutable-file hashes: `/var/lib/edge-infra/manifest.sha256`.
+- Preinstall evidence: `/var/backups/edge-infra/<timestamp>/` (`0700`).
+
+The random subscription path is a bearer credential. HTTPS protects it in transit; operators must not publish or commit it.

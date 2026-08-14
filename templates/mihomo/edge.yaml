@@ -22,7 +22,7 @@ proxies:
     type: hysteria2
     server: ${EDGE_DOMAIN}
     port: 443
-    ports: 20000-20031
+    ports: ${HOP_PORT_START}-${HOP_PORT_END}
     hop-interval: 20
     password: ${HY2_PASSWORD}
     sni: ${EDGE_DOMAIN}
@@ -33,7 +33,7 @@ proxies:
   - name: Edge-Trojan
     type: trojan
     server: ${EDGE_DOMAIN}
-    port: 8443
+    port: ${TROJAN_PORT}
     password: ${TROJAN_PASSWORD}
     sni: ${EDGE_DOMAIN}
     alpn: [http/1.1]

@@ -1,34 +1,50 @@
 # Troubleshooting
 
-## Mihomo 显示 Timeout
+## Preflight refused installation
 
-不能只看服务 `active` 或“UDP 包到达”。依次检查：
+This is expected on a non-fresh host. Read the exact conflict and resolve it manually; do not delete or stop an unknown service merely to make the installer pass.
+
+Useful read-only commands:
 
 ```bash
-systemctl status sing-box sing-box-trojan nginx hy2-port-hopping
-ss -lntup
-nft list table inet edge_hy2_port_hopping
-nstat -az UdpRcvbufErrors UdpSndbufErrors
-journalctl -u sing-box -u sing-box-trojan --since '10 minutes ago'
+sudo ss -lntup
+sudo systemctl --failed
+sudo nginx -T
+sudo nft list ruleset
+sudo ufw status numbered
 ```
 
-抓包时需要同时观察入站和服务端响应，并记录 UDP 包尺寸、源端口变化及时间差。若同一服务在不同运营商表现不同，优先判断路径故障，不要先修改主配置。
+## DNS or ACME failure
 
-## Port Hopping 更新失败
+Each configured name must have exactly one unique IPv4 answer and it must equal `PUBLIC_IPV4`. TCP 80 must reach nginx from the Internet, and a cloud firewall must allow it. The installer does not create DNS records or cloud security-group rules.
 
-若客户端报 `cannot parse 'hop-interval' as int`，将值改为整数，例如：
+After an install error, inspect the timestamped backup and confirm `edge-infra status` reports no installation before retrying.
+
+## Mihomo subscription parsing
+
+Some Android/older Mihomo builds require an integer `hop-interval`. The template deliberately uses:
 
 ```yaml
 hop-interval: 20
 ```
 
-## fallback 未回切
+Do not replace it with a range string such as `15-30`.
 
-- 确认两个节点的 health check 均成功。
-- 记住 `interval` 决定重新探测节奏。
-- `profile.store-selected` 可能恢复同名组的旧状态；隔离诊断可使用临时新组名。
-- 切换只作用于新连接，旧连接不会自动迁移。
+## Timeout diagnosis
 
-## 重启后检查
+Service `active` and packet arrival alone do not prove a working QUIC path. Check bidirectional packet sizes/timing, buffer error deltas and application logs:
 
-确认所有 unit `enabled` 且 `active`，GRO/UDP buffer 等既有兼容设置仍然生效，并把 `nstat` 的重启后数值作为新基线。
+```bash
+sudo edge-infra status
+sudo edge-infra verify
+sudo edge-infra health
+sudo journalctl -u edge-infra-hy2 -u edge-infra-trojan --since '10 minutes ago'
+sudo nft list table inet edge_infra_hy2_hopping
+sudo nstat -az UdpRcvbufErrors UdpSndbufErrors
+```
+
+If one carrier fails while another works and the VPS responds promptly, treat the UDP path as the leading suspect. Port hopping may help fixed-port treatment; Trojan is the independent TCP fallback.
+
+## Rollback refused changed files
+
+Copy and review local changes first. Use `--force` only when deleting those changes is intended. The force flag does not permit global nftables or arbitrary filesystem removal.

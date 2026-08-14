@@ -1,0 +1,6 @@
+table inet edge_infra_hy2_hopping {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+        iifname "${NETWORK_INTERFACE}" udp dport ${HOP_PORT_START}-${HOP_PORT_END} counter redirect to :443
+    }
+}

@@ -18,8 +18,8 @@
       "tls": {
         "enabled": true,
         "server_name": "${EDGE_DOMAIN}",
-        "certificate_path": "/etc/letsencrypt/live/${EDGE_DOMAIN}/fullchain.pem",
-        "key_path": "/etc/letsencrypt/live/${EDGE_DOMAIN}/privkey.pem"
+        "certificate_path": "/etc/letsencrypt/live/${CERT_NAME}/fullchain.pem",
+        "key_path": "/etc/letsencrypt/live/${CERT_NAME}/privkey.pem"
       }
     }
   ],

@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+if [ "${RENEWED_LINEAGE:-}" != "/etc/letsencrypt/live/${CERT_NAME}" ]; then
+  exit 0
+fi
+
+/usr/sbin/nginx -t
+/bin/systemctl reload nginx.service
+/usr/local/lib/edge-infra/sing-box/current/sing-box check -c /etc/edge-infra/sing-box/hy2.json
+/usr/local/lib/edge-infra/sing-box/current/sing-box check -c /etc/edge-infra/sing-box/trojan.json
+/bin/systemctl try-restart edge-infra-hy2.service edge-infra-trojan.service
