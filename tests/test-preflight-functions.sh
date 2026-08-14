@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_root"
 
-EDGE_INFRA_SOURCE_ONLY=1
+export EDGE_INFRA_SOURCE_ONLY=1
 # shellcheck source=../bin/edge-infra
 source bin/edge-infra
 
-PUBLIC_IPV4=8.8.8.8
+export PUBLIC_IPV4=8.8.8.8
 MOCK_DNS=''
 getent() {
   [[ -n $MOCK_DNS ]] && printf '%s\n' "$MOCK_DNS"

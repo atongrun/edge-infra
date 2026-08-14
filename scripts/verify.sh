@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+repo_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_dir"
 
 for file in bin/edge-infra lib/common.sh scripts/*.sh tests/*.sh templates/letsencrypt/*; do

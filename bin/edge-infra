@@ -2,9 +2,9 @@
 set -Eeuo pipefail
 umask 077
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 if [[ -f "$SCRIPT_DIR/../versions.env" ]]; then
-  PROJECT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+  PROJECT_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)
 else
   PROJECT_ROOT=/usr/local/lib/edge-infra/project
 fi
@@ -518,8 +518,12 @@ install_cmd() {
   NGINX_DEFAULT_REMOVED=0
   CERT_CREATED=0
   command -v nginx >/dev/null 2>&1 && NGINX_WAS_INSTALLED=1
-  systemctl is-active --quiet nginx.service && NGINX_WAS_ACTIVE=1 || true
-  systemctl is-enabled --quiet nginx.service && NGINX_WAS_ENABLED=1 || true
+  if systemctl is-active --quiet nginx.service; then
+    NGINX_WAS_ACTIVE=1
+  fi
+  if systemctl is-enabled --quiet nginx.service; then
+    NGINX_WAS_ENABLED=1
+  fi
   install -d -m 0700 "$BACKUP_ROOT"
   snapshot_host
   write_state
@@ -602,7 +606,9 @@ rollback_internal() {
     ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
   fi
   if command -v nginx >/dev/null 2>&1; then
-    nginx -t >/dev/null 2>&1 && systemctl reload nginx.service >/dev/null 2>&1 || true
+    if nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx.service >/dev/null 2>&1 || true
+    fi
   fi
   if [[ ${NGINX_WAS_ACTIVE:-0} == 0 ]]; then
     systemctl stop nginx.service >/dev/null 2>&1 || true

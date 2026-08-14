@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
 if rg -n --glob '*.sh' --glob '*.nft' 'flush[[:space:]]+ruleset|systemctl[[:space:]]+enable[[:space:]]+nftables' .; then

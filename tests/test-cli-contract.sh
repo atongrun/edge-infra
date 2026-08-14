@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tmpdir=$(mktemp -d /tmp/edge-infra-cli-test.XXXXXX)
 cleanup() {
   [[ -n ${tmpdir:-} && -d $tmpdir && ! -L $tmpdir ]] || return 0
