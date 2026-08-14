@@ -1,0 +1,17 @@
+[Unit]
+Description=edge-infra HY2 UDP port hopping redirect
+Documentation=https://v2.hysteria.network/docs/advanced/Port-Hopping/
+After=network-online.target
+Wants=network-online.target
+Before=edge-infra-hy2.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/usr/bin/test -e /proc/sys/net/ipv4/conf/${NETWORK_INTERFACE}
+ExecStartPre=/usr/bin/test -x /usr/sbin/nft
+ExecStart=/usr/sbin/nft -f /etc/edge-infra/nftables/hy2-port-hopping.nft
+ExecStop=/usr/local/lib/edge-infra/project/scripts/hopping-stop.sh
+
+[Install]
+WantedBy=multi-user.target

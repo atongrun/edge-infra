@@ -1,5 +1,5 @@
 [Unit]
-Description=sing-box Trojan TLS Fallback Service
+Description=edge-infra Trojan TLS fallback service
 Documentation=https://sing-box.sagernet.org/
 After=network-online.target nss-lookup.target time-sync.target
 Wants=network-online.target time-sync.target
@@ -10,8 +10,8 @@ StartLimitBurst=30
 Type=simple
 User=root
 Group=root
-ExecStartPre=/usr/local/bin/sing-box check -c /etc/sing-box/trojan.json
-ExecStart=/usr/local/bin/sing-box run -c /etc/sing-box/trojan.json
+ExecStartPre=/usr/local/lib/edge-infra/sing-box/current/sing-box check -c /etc/edge-infra/sing-box/trojan.json
+ExecStart=/usr/local/lib/edge-infra/sing-box/current/sing-box run -c /etc/edge-infra/sing-box/trojan.json
 Restart=always
 RestartSec=5s
 LimitNOFILE=1048576

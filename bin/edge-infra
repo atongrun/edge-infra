@@ -1,0 +1,743 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+if [[ -f "$SCRIPT_DIR/../versions.env" ]]; then
+  PROJECT_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)
+else
+  PROJECT_ROOT=/usr/local/lib/edge-infra/project
+fi
+
+[[ -f "$PROJECT_ROOT/lib/common.sh" ]] || {
+  printf 'edge-infra: project files not found at %s\n' "$PROJECT_ROOT" >&2
+  exit 1
+}
+# shellcheck source=../lib/common.sh
+source "$PROJECT_ROOT/lib/common.sh"
+# shellcheck source=../versions.env
+source "$PROJECT_ROOT/versions.env"
+
+ETC_DIR=/etc/edge-infra
+STATE_DIR=/var/lib/edge-infra
+STATE_FILE=$STATE_DIR/state.env
+MANIFEST_FILE=$STATE_DIR/manifest.sha256
+BACKUP_ROOT=/var/backups/edge-infra
+RUNTIME_ROOT=/usr/local/lib/edge-infra
+INSTALLED_PROJECT_ROOT=$RUNTIME_ROOT/project
+SING_BOX_ROOT=$RUNTIME_ROOT/sing-box
+CLI_PATH=/usr/local/sbin/edge-infra
+NGINX_SITE=/etc/nginx/sites-available/edge-infra.conf
+NGINX_LINK=/etc/nginx/sites-enabled/edge-infra.conf
+CERT_HOOK=/etc/letsencrypt/renewal-hooks/deploy/edge-infra
+SUB_ROOT=/var/www/edge-infra-subscription
+ACME_ROOT=/var/www/edge-infra-acme
+NFT_TABLE=edge_infra_hy2_hopping
+UNITS=(edge-infra-hy2.service edge-infra-trojan.service edge-infra-port-hopping.service)
+
+CONFIG_FILE=''
+ASSUME_YES=0
+FORCE=0
+ALLOW_CONSOLE=0
+DOWNLOAD_TMPDIR=''
+
+usage() {
+  cat <<'EOF'
+Usage:
+  edge-infra preflight --config /root/edge-infra.env [--allow-console]
+  edge-infra install   --config /root/edge-infra.env --yes [--allow-console]
+  edge-infra status
+  edge-infra verify
+  edge-infra health
+  edge-infra rollback --yes [--force]
+  edge-infra uninstall --yes [--force]
+
+The config file contains public deployment inputs only. HY2 and Trojan passwords
+are generated during install and stored at /etc/edge-infra/secrets.env (0600).
+EOF
+}
+
+require_root() {
+  (( EUID == 0 )) || die "this command must run as root"
+}
+
+acquire_lock() {
+  require_command flock
+  exec 9>/run/lock/edge-infra.lock
+  flock -n 9 || die "another edge-infra operation is running"
+}
+
+parse_options() {
+  while (($#)); do
+    case "$1" in
+      --config)
+        (($# >= 2)) || die "--config requires a path"
+        CONFIG_FILE=$2
+        shift 2
+        ;;
+      --yes)
+        ASSUME_YES=1
+        shift
+        ;;
+      --force)
+        FORCE=1
+        shift
+        ;;
+      --allow-console)
+        ALLOW_CONSOLE=1
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+}
+
+detect_arch() {
+  case "$(uname -m)" in
+    x86_64)
+      SING_BOX_ARCH=amd64
+      SING_BOX_SHA256=$SING_BOX_AMD64_SHA256
+      ;;
+    aarch64|arm64)
+      SING_BOX_ARCH=arm64
+      SING_BOX_SHA256=$SING_BOX_ARM64_SHA256
+      ;;
+    *) die "unsupported architecture: $(uname -m); V1 supports amd64 and arm64" ;;
+  esac
+}
+
+check_os() {
+  [[ -r /etc/os-release ]] || die "/etc/os-release is missing"
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  [[ ${ID:-} == ubuntu ]] || die "unsupported OS: ${ID:-unknown}; V1 supports Ubuntu only"
+  case "${VERSION_ID:-}" in
+    22.04|24.04) ;;
+    *) die "unsupported Ubuntu version: ${VERSION_ID:-unknown}; supported: 22.04, 24.04" ;;
+  esac
+}
+
+detect_interface() {
+  local -a interfaces=()
+  local value
+  if [[ -n $NETWORK_INTERFACE ]]; then
+    [[ -d /sys/class/net/$NETWORK_INTERFACE ]] || die "NETWORK_INTERFACE does not exist: $NETWORK_INTERFACE"
+    return
+  fi
+  while IFS= read -r value; do
+    [[ -n $value ]] && interfaces+=("$value")
+  done < <(ip -4 route show default | awk '{for (i=1; i<=NF; i++) if ($i == "dev") print $(i+1)}' | sort -u)
+  [[ ${#interfaces[@]} -eq 1 ]] || die "could not determine one default IPv4 interface; set NETWORK_INTERFACE explicitly"
+  NETWORK_INTERFACE=${interfaces[0]}
+}
+
+detect_ssh_port() {
+  local server_port
+  if [[ -n ${SSH_CONNECTION:-} ]]; then
+    server_port=${SSH_CONNECTION##* }
+    valid_port "$server_port" || die "SSH_CONNECTION contains an invalid server port"
+    SSH_PORT=$server_port
+    return
+  fi
+  (( ALLOW_CONSOLE == 1 )) || die "no active SSH_CONNECTION detected; use --allow-console only from a verified console"
+  local -a ports=()
+  while IFS= read -r server_port; do
+    [[ -n $server_port ]] && ports+=("$server_port")
+  done < <(sshd -T 2>/dev/null | awk '$1 == "port" {print $2}' | sort -u)
+  [[ ${#ports[@]} -eq 1 ]] || die "could not prove one SSH port from sshd -T"
+  SSH_PORT=${ports[0]}
+}
+
+check_dns() {
+  local domain=$1 resolved count
+  resolved=$(getent ahostsv4 "$domain" | awk '{print $1}' | sort -u || true)
+  [[ -n $resolved ]] || die "DNS has no IPv4 answer for $domain"
+  count=$(awk 'NF {count++} END {print count+0}' <<<"$resolved")
+  [[ $count == 1 && $resolved == "$PUBLIC_IPV4" ]] \
+    || die "$domain must resolve to exactly PUBLIC_IPV4=$PUBLIC_IPV4; got: ${resolved//$'\n'/, }"
+}
+
+check_public_ipv4() {
+  python3 - "$PUBLIC_IPV4" <<'PY'
+import ipaddress
+import sys
+
+address = ipaddress.ip_address(sys.argv[1])
+raise SystemExit(0 if address.version == 4 and address.is_global else 1)
+PY
+}
+
+tcp_port_in_use() {
+  local target=$1
+  ss -H -lnt | awk -v target="$target" '
+    { value=$4; sub(/^.*:/, "", value); if (value == target) found=1 }
+    END { exit found ? 0 : 1 }
+  '
+}
+
+udp_port_or_range_in_use() {
+  local start=$1 end=$2
+  ss -H -lnu | awk -v start="$start" -v end="$end" '
+    { value=$4; sub(/^.*:/, "", value); if (value ~ /^[0-9]+$/ && value >= start && value <= end) found=1 }
+    END { exit found ? 0 : 1 }
+  '
+}
+
+check_nginx_conflicts() {
+  if command -v nginx >/dev/null 2>&1; then
+    nginx -t >/dev/null 2>&1 || die "existing nginx configuration is invalid"
+    if nginx -T 2>&1 | grep -Eq '^[[:space:]]*listen[[:space:]]+([^;[:space:]]+:)?(80|443)([[:space:];]|$)'; then
+      die "existing nginx configuration declares TCP 80 or 443"
+    fi
+  fi
+}
+
+check_ufw_ssh() {
+  local status
+  UFW_ACTION=none
+  [[ $FIREWALL_MODE == auto ]] || return
+  command -v ufw >/dev/null 2>&1 || return
+  status=$(ufw status 2>/dev/null || true)
+  grep -q '^Status: active' <<<"$status" || return
+  if ! grep -Eq "(^|[[:space:]])(${SSH_PORT}/tcp|OpenSSH)([[:space:]]|$).*ALLOW" <<<"$status"; then
+    die "UFW is active but an allow rule for current SSH port $SSH_PORT cannot be proven"
+  fi
+  UFW_ACTION=manage
+}
+
+check_path_absent() {
+  [[ ! -e $1 && ! -L $1 ]] || die "managed target already exists: $1"
+}
+
+preflight_internal() {
+  [[ -n $CONFIG_FILE ]] || die "--config is required"
+  require_root
+  check_os
+  detect_arch
+  load_config "$CONFIG_FILE"
+  require_command getent
+  require_command ip
+  require_command ss
+  require_command sshd
+  require_command systemctl
+  require_command python3
+  detect_interface
+  detect_ssh_port
+  check_public_ipv4 || die "PUBLIC_IPV4 must be a globally routable IPv4 address"
+
+  [[ ! -e $STATE_FILE ]] || die "edge-infra state already exists; use status or uninstall"
+  check_path_absent "$ETC_DIR"
+  check_path_absent "$RUNTIME_ROOT"
+  check_path_absent "$CLI_PATH"
+  check_path_absent "$NGINX_SITE"
+  check_path_absent "$NGINX_LINK"
+  check_path_absent "$CERT_HOOK"
+  check_path_absent "$SUB_ROOT"
+  check_path_absent "$ACME_ROOT"
+  for unit in "${UNITS[@]}"; do
+    check_path_absent "/etc/systemd/system/$unit"
+    if systemctl list-unit-files "$unit" --no-legend 2>/dev/null | grep -q .; then
+      die "systemd unit already registered: $unit"
+    fi
+  done
+  [[ ! -e /etc/letsencrypt/live/$EDGE_DOMAIN ]] || die "certificate lineage already exists for $EDGE_DOMAIN"
+  if command -v nft >/dev/null 2>&1 && nft list table inet "$NFT_TABLE" >/dev/null 2>&1; then
+    die "nftables table already exists: inet $NFT_TABLE"
+  fi
+  tcp_port_in_use 80 && die "TCP 80 is already in use"
+  tcp_port_in_use 443 && die "TCP 443 is already in use"
+  tcp_port_in_use "$TROJAN_PORT" && die "TCP $TROJAN_PORT is already in use"
+  udp_port_or_range_in_use 443 443 && die "UDP 443 is already in use"
+  udp_port_or_range_in_use "$HOP_PORT_START" "$HOP_PORT_END" && die "a UDP hopping port is already in use"
+  check_nginx_conflicts
+  check_dns "$EDGE_DOMAIN"
+  check_dns "$SUB_DOMAIN"
+  check_ufw_ssh
+
+  log "preflight passed"
+  printf '%-24s %s\n' \
+    OS "Ubuntu ${VERSION_ID}" \
+    ARCH "$SING_BOX_ARCH" \
+    INTERFACE "$NETWORK_INTERFACE" \
+    SSH_PORT "$SSH_PORT" \
+    EDGE_DOMAIN "$EDGE_DOMAIN" \
+    SUB_DOMAIN "$SUB_DOMAIN" \
+    PUBLIC_IPV4 "$PUBLIC_IPV4" \
+    FIREWALL "$UFW_ACTION" \
+    SING_BOX_VERSION "$SING_BOX_VERSION"
+}
+
+state_value() {
+  printf '%s=%q\n' "$1" "$2"
+}
+
+write_state() {
+  install -d -m 0700 "$STATE_DIR"
+  {
+    state_value INSTALL_ID "$INSTALL_ID"
+    state_value INSTALL_PHASE "$INSTALL_PHASE"
+    state_value BACKUP_DIR "$BACKUP_DIR"
+    state_value EDGE_DOMAIN "$EDGE_DOMAIN"
+    state_value SUB_DOMAIN "$SUB_DOMAIN"
+    state_value PUBLIC_IPV4 "$PUBLIC_IPV4"
+    state_value ACME_EMAIL "$ACME_EMAIL"
+    state_value HOP_PORT_START "$HOP_PORT_START"
+    state_value HOP_PORT_END "$HOP_PORT_END"
+    state_value TROJAN_PORT "$TROJAN_PORT"
+    state_value SUBSCRIPTION_FILE "${SUBSCRIPTION_FILE:-}"
+    state_value FIREWALL_MODE "$FIREWALL_MODE"
+    state_value NETWORK_INTERFACE "$NETWORK_INTERFACE"
+    state_value SSH_PORT "$SSH_PORT"
+    state_value UFW_ACTION "$UFW_ACTION"
+    state_value NGINX_WAS_INSTALLED "$NGINX_WAS_INSTALLED"
+    state_value NGINX_WAS_ACTIVE "$NGINX_WAS_ACTIVE"
+    state_value NGINX_WAS_ENABLED "$NGINX_WAS_ENABLED"
+    state_value NGINX_DEFAULT_REMOVED "$NGINX_DEFAULT_REMOVED"
+    state_value CERT_CREATED "$CERT_CREATED"
+    state_value SING_BOX_VERSION "$SING_BOX_VERSION"
+  } > "$STATE_FILE.tmp"
+  chmod 0600 "$STATE_FILE.tmp"
+  mv -f "$STATE_FILE.tmp" "$STATE_FILE"
+}
+
+load_state() {
+  [[ -f $STATE_FILE ]] || die "edge-infra is not installed: $STATE_FILE not found"
+  [[ ! -L $STATE_FILE ]] || die "state file must not be a symlink"
+  # shellcheck disable=SC1090
+  source "$STATE_FILE"
+}
+
+snapshot_host() {
+  install -d -m 0700 "$BACKUP_DIR"
+  cp /etc/os-release "$BACKUP_DIR/os-release"
+  ss -lntup > "$BACKUP_DIR/listeners.txt" 2>&1 || true
+  systemctl list-unit-files > "$BACKUP_DIR/systemd-unit-files.txt" 2>&1 || true
+  systemctl --failed > "$BACKUP_DIR/systemd-failed.txt" 2>&1 || true
+  dpkg-query -W > "$BACKUP_DIR/packages.txt" 2>&1 || true
+  if command -v ufw >/dev/null 2>&1; then
+    ufw status numbered > "$BACKUP_DIR/ufw.txt" 2>&1 || true
+  fi
+  if command -v nft >/dev/null 2>&1; then
+    nft list ruleset > "$BACKUP_DIR/nftables.txt" 2>&1 || true
+  fi
+  if [[ -L /etc/nginx/sites-enabled/default ]]; then
+    readlink /etc/nginx/sites-enabled/default > "$BACKUP_DIR/nginx-default-link.txt"
+  fi
+}
+
+install_packages() {
+  log "installing Ubuntu repository packages"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y --no-install-recommends ca-certificates certbot curl iproute2 jq nftables nginx openssl tar
+}
+
+install_project_tooling() {
+  install -d -m 0755 "$INSTALLED_PROJECT_ROOT/lib" "$INSTALLED_PROJECT_ROOT/bin" "$INSTALLED_PROJECT_ROOT/scripts"
+  cp -a "$PROJECT_ROOT/templates" "$INSTALLED_PROJECT_ROOT/"
+  install -m 0644 "$PROJECT_ROOT/lib/common.sh" "$INSTALLED_PROJECT_ROOT/lib/common.sh"
+  install -m 0644 "$PROJECT_ROOT/versions.env" "$INSTALLED_PROJECT_ROOT/versions.env"
+  install -m 0755 "$PROJECT_ROOT/bin/edge-infra" "$INSTALLED_PROJECT_ROOT/bin/edge-infra"
+  install -m 0755 "$PROJECT_ROOT/scripts/hopping-stop.sh" "$INSTALLED_PROJECT_ROOT/scripts/hopping-stop.sh"
+  install -m 0755 "$PROJECT_ROOT/bin/edge-infra" "$CLI_PATH"
+}
+
+install_sing_box() {
+  local tmpdir asset url actual archive_dir
+  tmpdir=$(mktemp -d /tmp/edge-infra-download.XXXXXX)
+  DOWNLOAD_TMPDIR=$tmpdir
+  asset="sing-box-${SING_BOX_VERSION}-linux-${SING_BOX_ARCH}.tar.gz"
+  url="https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/${asset}"
+  log "downloading official sing-box v$SING_BOX_VERSION for $SING_BOX_ARCH"
+  curl --fail --location --proto '=https' --tlsv1.2 --retry 3 --output "$tmpdir/$asset" "$url"
+  actual=$(sha256_file "$tmpdir/$asset")
+  [[ $actual == "$SING_BOX_SHA256" ]] || die "sing-box checksum mismatch"
+  tar -xzf "$tmpdir/$asset" -C "$tmpdir"
+  archive_dir="$tmpdir/sing-box-${SING_BOX_VERSION}-linux-${SING_BOX_ARCH}"
+  [[ -x $archive_dir/sing-box ]] || die "sing-box binary missing from verified archive"
+  install -d -m 0755 "$SING_BOX_ROOT/$SING_BOX_VERSION"
+  install -m 0755 "$archive_dir/sing-box" "$SING_BOX_ROOT/$SING_BOX_VERSION/sing-box"
+  ln -s "$SING_BOX_ROOT/$SING_BOX_VERSION" "$SING_BOX_ROOT/current"
+  "$SING_BOX_ROOT/current/sing-box" version | grep -Fq "$SING_BOX_VERSION" || die "installed sing-box version check failed"
+  cleanup_download_tmp "$tmpdir" || die "temporary download cleanup failed"
+  DOWNLOAD_TMPDIR=''
+}
+
+cleanup_download_tmp() {
+  local path=${1:-}
+  [[ -n $path ]] || return 0
+  if [[ ! -d $path || -L $path ]]; then
+    warn "refusing invalid temporary directory cleanup: $path"
+    return 1
+  fi
+  case "$path" in
+    /tmp/*|/var/tmp/*) rm -rf -- "$path" ;;
+    *)
+      warn "refusing unexpected temporary directory cleanup: $path"
+      return 1
+      ;;
+  esac
+}
+
+generate_and_render() {
+  install -d -m 0700 "$ETC_DIR/sing-box" "$ETC_DIR/nftables"
+  HY2_PASSWORD=$(openssl rand -hex 32)
+  TROJAN_PASSWORD=$(openssl rand -hex 32)
+  SUBSCRIPTION_TOKEN=$(openssl rand -hex 24)
+  SUBSCRIPTION_FILE="$SUBSCRIPTION_TOKEN.yaml"
+  {
+    printf 'HY2_PASSWORD=%s\n' "$HY2_PASSWORD"
+    printf 'TROJAN_PASSWORD=%s\n' "$TROJAN_PASSWORD"
+    printf 'SUBSCRIPTION_TOKEN=%s\n' "$SUBSCRIPTION_TOKEN"
+  } > "$ETC_DIR/secrets.env"
+  chmod 0600 "$ETC_DIR/secrets.env"
+
+  render_template "$PROJECT_ROOT/templates/sing-box/hy2.json" "$ETC_DIR/sing-box/hy2.json"
+  render_template "$PROJECT_ROOT/templates/sing-box/trojan.json" "$ETC_DIR/sing-box/trojan.json"
+  render_template "$PROJECT_ROOT/templates/nftables/hy2-port-hopping.nft" "$ETC_DIR/nftables/hy2-port-hopping.nft"
+  install -d -m 0755 "$SUB_ROOT" "$ACME_ROOT"
+  render_template "$PROJECT_ROOT/templates/mihomo/edge.yaml" "$SUB_ROOT/$SUBSCRIPTION_FILE"
+  chown root:www-data "$SUB_ROOT" "$SUB_ROOT/$SUBSCRIPTION_FILE"
+  chmod 0750 "$SUB_ROOT"
+  chmod 0640 "$SUB_ROOT/$SUBSCRIPTION_FILE"
+
+  install -m 0644 "$PROJECT_ROOT/templates/systemd/edge-infra-hy2.service" /etc/systemd/system/edge-infra-hy2.service
+  install -m 0644 "$PROJECT_ROOT/templates/systemd/edge-infra-trojan.service" /etc/systemd/system/edge-infra-trojan.service
+  render_template "$PROJECT_ROOT/templates/systemd/edge-infra-port-hopping.service" /etc/systemd/system/edge-infra-port-hopping.service
+  chmod 0644 /etc/systemd/system/edge-infra-port-hopping.service
+  render_template "$PROJECT_ROOT/templates/letsencrypt/reload-edge-infra" "$CERT_HOOK"
+  chmod 0700 "$CERT_HOOK"
+}
+
+configure_certificate_and_nginx() {
+  if (( NGINX_WAS_INSTALLED == 0 )) && [[ -L /etc/nginx/sites-enabled/default ]]; then
+    rm -- /etc/nginx/sites-enabled/default
+    NGINX_DEFAULT_REMOVED=1
+    write_state
+  fi
+  render_template "$PROJECT_ROOT/templates/nginx/bootstrap.conf" "$NGINX_SITE"
+  chmod 0644 "$NGINX_SITE"
+  ln -s "$NGINX_SITE" "$NGINX_LINK"
+  nginx -t
+  systemctl enable --now nginx.service
+  systemctl reload nginx.service
+
+  log "requesting Let's Encrypt certificate with Certbot webroot HTTP-01"
+  CERT_CREATED=1
+  write_state
+  certbot certonly --webroot --webroot-path "$ACME_ROOT" \
+    --cert-name "$EDGE_DOMAIN" \
+    --domain "$EDGE_DOMAIN" --domain "$SUB_DOMAIN" \
+    --email "$ACME_EMAIL" --agree-tos --non-interactive --no-eff-email
+  render_template "$PROJECT_ROOT/templates/nginx/final.conf" "$NGINX_SITE"
+  chmod 0644 "$NGINX_SITE"
+  nginx -t
+  systemctl reload nginx.service
+}
+
+add_acme_ufw_rule() {
+  [[ $UFW_ACTION == manage ]] || {
+    warn "UFW is not active or FIREWALL_MODE=none; no host firewall rules were changed"
+    return
+  }
+  log "opening comment-scoped TCP 80 before the ACME HTTP-01 request"
+  ufw allow 80/tcp comment 'edge-infra ACME HTTP'
+}
+
+add_service_ufw_rules() {
+  [[ $UFW_ACTION == manage ]] || return 0
+  log "adding comment-scoped service rules; UFW policy and SSH rules remain unchanged"
+  ufw allow 443/tcp comment 'edge-infra HTTPS subscription'
+  ufw allow 443/udp comment 'edge-infra Hysteria2'
+  ufw allow "$TROJAN_PORT/tcp" comment 'edge-infra Trojan TLS'
+  ufw allow "$HOP_PORT_START:$HOP_PORT_END/udp" comment 'edge-infra HY2 hopping'
+}
+
+remove_ufw_rules() {
+  command -v ufw >/dev/null 2>&1 || return 0
+  local number
+  while :; do
+    number=$(ufw status numbered 2>/dev/null | sed -n '/edge-infra/ s/^\[[[:space:]]*\([0-9][0-9]*\)\].*/\1/p' | head -n 1)
+    [[ -n $number ]] || break
+    ufw --force delete "$number" >/dev/null
+  done
+}
+
+write_manifest() {
+  local files=(
+    "$ETC_DIR/secrets.env"
+    "$ETC_DIR/sing-box/hy2.json"
+    "$ETC_DIR/sing-box/trojan.json"
+    "$ETC_DIR/nftables/hy2-port-hopping.nft"
+    "$SUB_ROOT/$SUBSCRIPTION_FILE"
+    /etc/systemd/system/edge-infra-hy2.service
+    /etc/systemd/system/edge-infra-trojan.service
+    /etc/systemd/system/edge-infra-port-hopping.service
+    "$NGINX_SITE"
+    "$CERT_HOOK"
+    "$SING_BOX_ROOT/$SING_BOX_VERSION/sing-box"
+    "$CLI_PATH"
+    "$INSTALLED_PROJECT_ROOT/lib/common.sh"
+    "$INSTALLED_PROJECT_ROOT/versions.env"
+    "$INSTALLED_PROJECT_ROOT/scripts/hopping-stop.sh"
+  )
+  : > "$MANIFEST_FILE"
+  local file
+  for file in "${files[@]}"; do
+    [[ -f $file ]] || die "cannot manifest missing file: $file"
+    printf '%s  %s\n' "$(sha256_file "$file")" "$file" >> "$MANIFEST_FILE"
+  done
+  chmod 0600 "$MANIFEST_FILE"
+}
+
+start_services() {
+  "$SING_BOX_ROOT/current/sing-box" check -c "$ETC_DIR/sing-box/hy2.json"
+  "$SING_BOX_ROOT/current/sing-box" check -c "$ETC_DIR/sing-box/trojan.json"
+  nft -c -f "$ETC_DIR/nftables/hy2-port-hopping.nft"
+  systemctl daemon-reload
+  systemctl enable --now edge-infra-port-hopping.service
+  systemctl enable --now edge-infra-hy2.service edge-infra-trojan.service
+}
+
+install_cmd() {
+  require_root
+  acquire_lock
+  preflight_internal
+  (( ASSUME_YES == 1 )) || die "install is mutating; rerun with --yes after reviewing preflight output"
+
+  INSTALL_ID=$(date -u +%Y%m%dT%H%M%SZ)
+  BACKUP_DIR=$BACKUP_ROOT/$INSTALL_ID
+  INSTALL_PHASE=started
+  NGINX_WAS_INSTALLED=0
+  NGINX_WAS_ACTIVE=0
+  NGINX_WAS_ENABLED=0
+  NGINX_DEFAULT_REMOVED=0
+  CERT_CREATED=0
+  command -v nginx >/dev/null 2>&1 && NGINX_WAS_INSTALLED=1
+  if systemctl is-active --quiet nginx.service; then
+    NGINX_WAS_ACTIVE=1
+  fi
+  if systemctl is-enabled --quiet nginx.service; then
+    NGINX_WAS_ENABLED=1
+  fi
+  install -d -m 0700 "$BACKUP_ROOT"
+  snapshot_host
+  write_state
+  cp "$STATE_FILE" "$BACKUP_DIR/preinstall-state.env"
+  trap 'install_failed "$LINENO"' ERR
+
+  install_packages
+  INSTALL_PHASE=packages
+  write_state
+  install_project_tooling
+  install_sing_box
+  INSTALL_PHASE=binary
+  write_state
+  generate_and_render
+  INSTALL_PHASE=rendered
+  write_state
+  add_acme_ufw_rule
+  configure_certificate_and_nginx
+  add_service_ufw_rules
+  start_services
+  INSTALL_PHASE=complete
+  write_state
+  write_manifest
+  trap - ERR
+  verify_internal
+  log "installation complete"
+  log "subscription URL: https://$SUB_DOMAIN/$SUBSCRIPTION_FILE"
+  log "secrets remain root-only at $ETC_DIR/secrets.env"
+}
+
+install_failed() {
+  local line=$1
+  trap - ERR
+  set +e
+  warn "install failed near line $line; rolling back only edge-infra managed objects"
+  if [[ -n ${DOWNLOAD_TMPDIR:-} ]]; then
+    cleanup_download_tmp "$DOWNLOAD_TMPDIR" || warn "temporary download directory requires manual cleanup"
+    DOWNLOAD_TMPDIR=''
+  fi
+  if [[ -f $STATE_FILE ]]; then
+    rollback_internal 1
+  fi
+  exit 1
+}
+
+manifest_changed() {
+  [[ -f $MANIFEST_FILE ]] || return 1
+  sha256sum --check --quiet "$MANIFEST_FILE" >/dev/null 2>&1 || return 0
+  return 1
+}
+
+safe_remove_tree() {
+  local path=$1 expected=$2
+  [[ $path == "$expected" ]] || die "refusing unexpected removal target: $path"
+  [[ $path != / && $path != /etc && $path != /usr && $path != /var ]] || die "refusing broad removal target"
+  [[ ! -L $path ]] || die "refusing recursive removal of symlink: $path"
+  [[ -e $path ]] && rm -rf -- "$path"
+}
+
+rollback_internal() {
+  local automatic=${1:-0}
+  load_state
+  if (( automatic == 0 && FORCE == 0 )) && [[ $INSTALL_PHASE == complete && ! -f $MANIFEST_FILE ]]; then
+    die "managed-file manifest is missing; refusing rollback without --force"
+  fi
+  if (( automatic == 0 && FORCE == 0 )) && manifest_changed; then
+    die "managed files changed since install; review them and rerun with --force if removal is intended"
+  fi
+
+  systemctl disable --now edge-infra-hy2.service edge-infra-trojan.service >/dev/null 2>&1 || true
+  systemctl disable --now edge-infra-port-hopping.service >/dev/null 2>&1 || true
+  if command -v nft >/dev/null 2>&1 && nft list table inet "$NFT_TABLE" >/dev/null 2>&1; then
+    nft delete table inet "$NFT_TABLE" || true
+  fi
+  remove_ufw_rules
+
+  [[ -L $NGINX_LINK ]] && rm -- "$NGINX_LINK"
+  [[ -f $NGINX_SITE ]] && rm -- "$NGINX_SITE"
+  if [[ ${NGINX_DEFAULT_REMOVED:-0} == 1 && -f /etc/nginx/sites-available/default && ! -e /etc/nginx/sites-enabled/default ]]; then
+    ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+  fi
+  if command -v nginx >/dev/null 2>&1; then
+    if nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx.service >/dev/null 2>&1 || true
+    fi
+  fi
+  if [[ ${NGINX_WAS_ACTIVE:-0} == 0 ]]; then
+    systemctl stop nginx.service >/dev/null 2>&1 || true
+  fi
+  if [[ ${NGINX_WAS_ENABLED:-0} == 0 ]]; then
+    systemctl disable nginx.service >/dev/null 2>&1 || true
+  fi
+
+  if [[ ${CERT_CREATED:-0} == 1 ]] && command -v certbot >/dev/null 2>&1; then
+    if ! certbot delete --cert-name "$EDGE_DOMAIN" --non-interactive >/dev/null 2>&1; then
+      warn "could not delete the managed certificate lineage; inspect certbot certificates"
+    fi
+  fi
+  [[ -f $CERT_HOOK ]] && rm -- "$CERT_HOOK"
+  local unit
+  for unit in "${UNITS[@]}"; do
+    [[ -f /etc/systemd/system/$unit ]] && rm -- "/etc/systemd/system/$unit"
+  done
+  systemctl daemon-reload >/dev/null 2>&1 || true
+
+  safe_remove_tree "$ETC_DIR" /etc/edge-infra
+  safe_remove_tree "$SUB_ROOT" /var/www/edge-infra-subscription
+  safe_remove_tree "$ACME_ROOT" /var/www/edge-infra-acme
+  safe_remove_tree "$RUNTIME_ROOT" /usr/local/lib/edge-infra
+  [[ -f $CLI_PATH ]] && rm -- "$CLI_PATH"
+  if [[ -f $STATE_FILE ]]; then
+    cp "$STATE_FILE" "$BACKUP_DIR/removed-state.env" 2>/dev/null || true
+  fi
+  safe_remove_tree "$STATE_DIR" /var/lib/edge-infra
+  log "rollback complete; OS packages and backup $BACKUP_DIR were intentionally preserved"
+}
+
+rollback_cmd() {
+  (( ASSUME_YES == 1 )) || die "rollback is mutating; rerun with --yes"
+  require_root
+  acquire_lock
+  rollback_internal 0
+}
+
+status_cmd() {
+  require_root
+  load_state
+  printf '%-24s %s\n' \
+    INSTALL_PHASE "$INSTALL_PHASE" \
+    EDGE_DOMAIN "$EDGE_DOMAIN" \
+    SUB_DOMAIN "$SUB_DOMAIN" \
+    SUBSCRIPTION "https://$SUB_DOMAIN/$SUBSCRIPTION_FILE" \
+    INTERFACE "$NETWORK_INTERFACE" \
+    HOPPING_PORTS "$HOP_PORT_START-$HOP_PORT_END/udp" \
+    TROJAN_PORT "$TROJAN_PORT/tcp" \
+    BACKUP_DIR "$BACKUP_DIR"
+  local unit
+  for unit in nginx.service "${UNITS[@]}"; do
+    printf '%-24s enabled=%-8s active=%s\n' "$unit" \
+      "$(systemctl is-enabled "$unit" 2>/dev/null || true)" \
+      "$(systemctl is-active "$unit" 2>/dev/null || true)"
+  done
+}
+
+verify_internal() {
+  load_state
+  [[ $INSTALL_PHASE == complete ]] || die "installation phase is not complete: $INSTALL_PHASE"
+  [[ -x $SING_BOX_ROOT/current/sing-box ]] || die "sing-box binary is missing"
+  [[ $(readlink -f "$SING_BOX_ROOT/current") == "$SING_BOX_ROOT/$SING_BOX_VERSION" ]] \
+    || die "sing-box current symlink points to an unexpected target"
+  [[ -f $MANIFEST_FILE ]] || die "managed-file manifest is missing"
+  sha256sum --check --quiet "$MANIFEST_FILE" || die "managed file checksum verification failed"
+  [[ $(stat -c '%a' "$ETC_DIR/secrets.env") == 600 ]] || die "secrets.env permission must be 600"
+  [[ $(stat -c '%a' "$SUB_ROOT/$SUBSCRIPTION_FILE") == 640 ]] || die "subscription permission must be 640"
+  [[ $(stat -c '%U:%G' "$SUB_ROOT/$SUBSCRIPTION_FILE") == root:www-data ]] || die "subscription owner must be root:www-data"
+  "$SING_BOX_ROOT/current/sing-box" check -c "$ETC_DIR/sing-box/hy2.json"
+  "$SING_BOX_ROOT/current/sing-box" check -c "$ETC_DIR/sing-box/trojan.json"
+  nginx -t
+  nft list table inet "$NFT_TABLE" >/dev/null
+  local unit
+  for unit in nginx.service "${UNITS[@]}"; do
+    systemctl is-enabled --quiet "$unit" || die "$unit is not enabled"
+    systemctl is-active --quiet "$unit" || die "$unit is not active"
+  done
+  tcp_port_in_use 443 || die "TCP 443 is not listening"
+  tcp_port_in_use "$TROJAN_PORT" || die "TCP $TROJAN_PORT is not listening"
+  udp_port_or_range_in_use 443 443 || die "UDP 443 is not listening"
+  curl --fail --silent --show-error --resolve "$SUB_DOMAIN:443:127.0.0.1" \
+    "https://$SUB_DOMAIN/$SUBSCRIPTION_FILE" >/dev/null
+  log "verify passed"
+}
+
+verify_cmd() {
+  require_root
+  verify_internal
+}
+
+health_cmd() {
+  require_root
+  verify_internal
+  load_state
+  check_dns "$EDGE_DOMAIN"
+  check_dns "$SUB_DOMAIN"
+  openssl x509 -checkend 604800 -noout -in "/etc/letsencrypt/live/$EDGE_DOMAIN/fullchain.pem" \
+    || die "certificate expires in less than seven days"
+  timeout 10 openssl s_client -showcerts -connect "127.0.0.1:$TROJAN_PORT" -servername "$EDGE_DOMAIN" </dev/null 2>/dev/null \
+    | grep -q 'BEGIN CERTIFICATE' || die "Trojan TLS handshake check failed"
+  local unit restarts
+  for unit in "${UNITS[@]}" nginx.service; do
+    restarts=$(systemctl show "$unit" -p NRestarts --value 2>/dev/null || printf '?')
+    printf '%-36s NRestarts=%s\n' "$unit" "$restarts"
+  done
+  if command -v nstat >/dev/null 2>&1; then
+    nstat -az UdpRcvbufErrors UdpSndbufErrors
+  fi
+  log "health passed; external Mihomo client testing is still required"
+}
+
+main() {
+  local command=${1:-help}
+  (($# == 0)) || shift
+  parse_options "$@"
+  case "$command" in
+    help) usage ;;
+    preflight) preflight_internal ;;
+    install) install_cmd ;;
+    status) status_cmd ;;
+    verify) verify_cmd ;;
+    health) health_cmd ;;
+    rollback|uninstall) rollback_cmd ;;
+    *) usage; die "unknown command: $command" ;;
+  esac
+}
+
+if [[ ${EDGE_INFRA_SOURCE_ONLY:-0} != 1 ]]; then
+  main "$@"
+fi

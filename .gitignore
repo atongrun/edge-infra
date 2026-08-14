@@ -2,8 +2,9 @@
 .env
 .env.*
 !.env.example
+*.env
+!versions.env
 secrets.*
-!env/secrets.env.example
 *.key
 *.pem
 *.crt

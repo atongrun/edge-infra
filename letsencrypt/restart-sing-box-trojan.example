@@ -1,7 +1,0 @@
-#!/bin/sh
-set -eu
-
-if [ "${RENEWED_LINEAGE:-}" = "/etc/letsencrypt/live/${EDGE_DOMAIN}" ] && systemctl is-active --quiet sing-box-trojan.service; then
-  /usr/local/bin/sing-box check -c /etc/sing-box/trojan.json
-  systemctl restart sing-box-trojan.service
-fi

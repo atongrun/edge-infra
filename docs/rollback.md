@@ -1,15 +1,33 @@
-# Rollback
+# Rollback and uninstall
 
-回滚只删除 V1 新增能力，不修改主 HY2 配置和原 nginx 订阅站点。
+`rollback` and `uninstall` currently share the same V1 behavior:
 
-1. 先把客户端订阅恢复到变更前备份。
-2. `systemctl disable --now sing-box-trojan.service`
-3. 删除 UFW 的 `8443/tcp` 放行规则。
-4. `systemctl disable --now hy2-port-hopping.service`
-5. 删除 UFW 的 `20000:20031/udp` 放行规则。
-6. 确认独立 nftables table 已删除；若仍存在，仅执行：
-   `nft delete table inet edge_hy2_port_hopping`
-7. 删除新增证书 hook、独立 unit 和独立配置，执行 `systemctl daemon-reload`。
-8. 验证 SSH、原 HY2 UDP 443、nginx TCP 443、订阅、UFW 与监听状态。
+```bash
+sudo edge-infra rollback --yes
+```
 
-不要 flush nftables，不要以恢复 `/etc/sing-box/config.json` 作为回滚步骤；该文件在此改造中本就不应修改。
+The command:
+
+1. Verifies managed-file hashes and refuses changed files unless `--force` is explicit.
+2. Stops/disables only `edge-infra-*` units.
+3. Deletes only `table inet edge_infra_hy2_hopping`.
+4. Deletes only UFW rules carrying an `edge-infra` comment.
+5. Removes the edge-infra nginx site and reloads nginx if its remaining config validates.
+6. Restores the nginx default symlink only when the transaction removed it.
+7. Deletes only the certificate lineage created by this transaction.
+8. Removes edge-infra configs, subscription, binary, CLI and transaction state.
+9. Preserves `/var/backups/edge-infra/<timestamp>/` and installed APT packages.
+
+## Why packages remain
+
+nginx, Certbot, nftables and their dependencies may become shared after installation. Automatically removing them during rollback could break unrelated services. Package cleanup is therefore a separate operator decision.
+
+## Changed managed files
+
+If an operator edits a generated subscription or config, normal rollback stops rather than deleting it. Review and copy any desired changes, then run:
+
+```bash
+sudo edge-infra uninstall --yes --force
+```
+
+`--force` bypasses only the managed-file hash gate. It does not broaden filesystem or nftables targets.
