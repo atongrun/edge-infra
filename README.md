@@ -128,6 +128,7 @@ Rollback stops only `edge-infra-*` units, deletes only its own nftables table an
 
 - [Architecture and ownership](docs/architecture.md)
 - [Deployment contract](docs/deployment.md)
+- [Optional Reality candidate overlay](docs/reality-candidate.md)
 - [Rollback and uninstall](docs/rollback.md)
 - [Security model](docs/security.md)
 - [Testing and release gates](docs/testing.md)
