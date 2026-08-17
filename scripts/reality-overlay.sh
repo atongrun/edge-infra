@@ -119,6 +119,17 @@ port_in_use() {
   ss -H -lnt | awk -v target="$1" '{p=$4; sub(/^.*:/,"",p); if (p == target) found=1} END {exit found ? 0 : 1}'
 }
 
+wait_for_listener() {
+  local attempt
+  for attempt in {1..20}; do
+    if ss -H -lntp | grep -Eq ":${REALITY_PORT}[[:space:]].*sing-box"; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
 check_target() {
   local output
   output=$(timeout 15 openssl s_client -connect "$REALITY_TARGET:443" -servername "$REALITY_SERVER_NAME" \
@@ -321,7 +332,7 @@ verify_overlay() {
   "$SING_BOX_BIN" check -c "$REALITY_CONFIG" >/dev/null
   systemctl is-active --quiet "$UNIT_NAME" || die 'Reality service is not active'
   systemctl is-enabled --quiet "$UNIT_NAME" || die 'Reality service is not enabled'
-  ss -H -lntp | grep -Eq ":${REALITY_PORT}[[:space:]].*sing-box" || die "sing-box is not listening on TCP $REALITY_PORT"
+  wait_for_listener || die "sing-box is not listening on TCP $REALITY_PORT"
   ufw status | grep -Fq "$UFW_COMMENT" || die 'Reality UFW rule missing'
   [[ $(grep -c '^  - name: DediOne-Reality$' "$SUBSCRIPTION_FILE") == 1 ]] || die 'Reality subscription node missing'
   [[ $(grep -c '^  - DediOne-Reality$' "$SUBSCRIPTION_FILE") == 2 ]] || die 'Reality selector entries missing'
