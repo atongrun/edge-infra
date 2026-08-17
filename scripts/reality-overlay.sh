@@ -182,20 +182,20 @@ render_reality_config() {
 
 render_client_node() {
   cat <<EOF
-  - name: $NODE_NAME
-    type: vless
-    server: $REALITY_SERVER
-    port: $REALITY_PORT
-    uuid: $REALITY_UUID
-    network: tcp
-    udp: true
-    tls: true
-    servername: $REALITY_SERVER_NAME
-    flow: xtls-rprx-vision
-    client-fingerprint: chrome
-    reality-opts:
-      public-key: $REALITY_PUBLIC_KEY
-      short-id: $REALITY_SHORT_ID
+- name: $NODE_NAME
+  type: vless
+  server: $REALITY_SERVER
+  port: $REALITY_PORT
+  uuid: $REALITY_UUID
+  network: tcp
+  udp: true
+  tls: true
+  servername: $REALITY_SERVER_NAME
+  flow: xtls-rprx-vision
+  client-fingerprint: chrome
+  reality-opts:
+    public-key: $REALITY_PUBLIC_KEY
+    short-id: $REALITY_SHORT_ID
 EOF
 }
 
@@ -216,7 +216,7 @@ render_subscription() {
     target && !added && $0 == "  - PROXY" {print; print "  - DediOne-Reality"; added=1; next}
     {print}
   ' "$staged" > "$output"
-  [[ $(grep -c '^  - name: DediOne-Reality$' "$output") == 1 ]] || die 'failed to add exactly one Reality node'
+  [[ $(grep -c '^- name: DediOne-Reality$' "$output") == 1 ]] || die 'failed to add exactly one Reality node'
   [[ $(grep -c '^  - DediOne-Reality$' "$output") == 2 ]] || die 'failed to add Reality to Proxies and OpenAI groups'
 }
 
@@ -334,7 +334,7 @@ verify_overlay() {
   systemctl is-enabled --quiet "$UNIT_NAME" || die 'Reality service is not enabled'
   wait_for_listener || die "sing-box is not listening on TCP $REALITY_PORT"
   ufw status | grep -Fq "$UFW_COMMENT" || die 'Reality UFW rule missing'
-  [[ $(grep -c '^  - name: DediOne-Reality$' "$SUBSCRIPTION_FILE") == 1 ]] || die 'Reality subscription node missing'
+  [[ $(grep -c '^- name: DediOne-Reality$' "$SUBSCRIPTION_FILE") == 1 ]] || die 'Reality subscription node missing'
   [[ $(grep -c '^  - DediOne-Reality$' "$SUBSCRIPTION_FILE") == 2 ]] || die 'Reality selector entries missing'
   [[ $(sha256_file "$SUBSCRIPTION_FILE") == "$INSTALLED_SUBSCRIPTION_SHA256" ]] || die 'subscription changed after install'
   check_target
