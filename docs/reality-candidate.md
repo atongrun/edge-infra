@@ -12,7 +12,7 @@ The overlay owns only:
 - one `DediOne-Reality` node in the existing subscription;
 - `/var/lib/edge-infra-reality` state and a retained backup under `/var/backups/edge-infra-reality`.
 
-Reality is added after the existing `PROXY` entry in both the `Proxies` and `OpenAI` selectors. It is a manual candidate and does not become the default automatically.
+The published subscription exposes one `主链路` fallback group. Reality is first, Trojan is the first fallback, and the two HY2 variants remain later performance backups. General and OpenAI rules point directly to this group, so the client no longer presents nested `PROXY`, `Proxies`, and `OpenAI` rows.
 
 ## Deploy
 
@@ -37,3 +37,11 @@ Rollback stops only the Reality unit, deletes only its UFW rule and config, and 
 ## Client gate
 
 Validate the rendered subscription with the actual Mihomo binary and directly exercise `DediOne-Reality` before beginning dogfood. Test both system proxy and TUN; a successful server listener does not prove Codex or other applications use that route.
+
+Existing overlay installations can migrate without restarting any proxy service:
+
+```bash
+sudo edge-infra-reality simplify --yes
+```
+
+The command keeps the previous subscription beside the original deployment backup and updates the tracked subscription hash only after the new one-group policy verifies successfully.

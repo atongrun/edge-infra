@@ -12,6 +12,8 @@ grep -q 'flow:"xtls-rprx-vision"' scripts/reality-overlay.sh
 grep -q 'network: tcp' scripts/reality-overlay.sh
 grep -q 'client-fingerprint: chrome' scripts/reality-overlay.sh
 grep -q 'DediOne-Reality' scripts/reality-overlay.sh
+grep -q 'name: 主链路' scripts/reality-overlay.sh
+grep -q 'simplify_groups' scripts/reality-overlay.sh
 grep -q '^- name: \$NODE_NAME$' scripts/reality-overlay.sh
 grep -q 'SING_BOX_BIN=/usr/local/bin/sing-box' scripts/reality-overlay.sh
 grep -q 'wait_for_listener' scripts/reality-overlay.sh

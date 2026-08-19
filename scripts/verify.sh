@@ -10,7 +10,9 @@ done
 
 grep -q 'hop-interval: 20' templates/mihomo/edge.yaml
 grep -q 'disable-mtu-discovery: true' templates/mihomo/edge.yaml
-grep -q 'Edge-HY2, Edge-HY2-Hop, Edge-Trojan' templates/mihomo/edge.yaml
+grep -q 'name: 主链路' templates/mihomo/edge.yaml
+grep -q 'Edge-Trojan, Edge-HY2, Edge-HY2-Hop' templates/mihomo/edge.yaml
+! grep -Eq 'name: (PROXY|Proxies|OpenAI)' templates/mihomo/edge.yaml
 grep -q 'table inet edge_infra_hy2_hopping' templates/nftables/hy2-port-hopping.nft
 grep -Eq '^SING_BOX_VERSION=[0-9]+\.[0-9]+\.[0-9]+$' versions.env
 grep -Eq '^SING_BOX_AMD64_SHA256=[a-f0-9]{64}$' versions.env

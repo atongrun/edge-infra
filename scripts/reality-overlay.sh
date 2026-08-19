@@ -36,6 +36,7 @@ Usage:
   reality-overlay.sh install   --config FILE --yes
   reality-overlay.sh status
   reality-overlay.sh verify
+  reality-overlay.sh simplify --yes
   reality-overlay.sh rollback --yes [--force]
 EOF
 }
@@ -144,8 +145,11 @@ check_subscription_contract() {
   [[ -f $SUBSCRIPTION_FILE && ! -L $SUBSCRIPTION_FILE ]] || die 'subscription must be a regular non-symlink file'
   [[ $(grep -c '^proxies:$' "$SUBSCRIPTION_FILE") == 1 ]] || die 'subscription must contain exactly one proxies section'
   [[ $(grep -c '^proxy-groups:$' "$SUBSCRIPTION_FILE") == 1 ]] || die 'subscription must contain exactly one proxy-groups section'
-  grep -q '^- name: Proxies$' "$SUBSCRIPTION_FILE" || die 'subscription group Proxies not found'
-  grep -q '^- name: OpenAI$' "$SUBSCRIPTION_FILE" || die 'subscription group OpenAI not found'
+  if ! grep -q '^- name: 主链路$' "$SUBSCRIPTION_FILE"; then
+    grep -q '^- name: PROXY$' "$SUBSCRIPTION_FILE" || die 'subscription group PROXY not found'
+    grep -q '^- name: Proxies$' "$SUBSCRIPTION_FILE" || die 'subscription group Proxies not found'
+    grep -q '^- name: OpenAI$' "$SUBSCRIPTION_FILE" || die 'subscription group OpenAI not found'
+  fi
   ! grep -Fq "name: $NODE_NAME" "$SUBSCRIPTION_FILE" || die "$NODE_NAME already exists in subscription"
 }
 
@@ -199,6 +203,61 @@ render_client_node() {
 EOF
 }
 
+check_main_chain() {
+  local file=$1 actual_order expected_order
+  [[ $(grep -c '^- name: 主链路$' "$file") == 1 ]] || die 'main chain group must appear exactly once'
+  ! grep -Eq '^- name: (PROXY|Proxies|OpenAI)$' "$file" || die 'legacy nested groups remain'
+  ! grep -Eq '^-[^#]*,(PROXY|Proxies|OpenAI)(,|$)' "$file" || die 'legacy rule targets remain'
+
+  actual_order=$(awk '
+    $0 == "- name: 主链路" {in_group=1; next}
+    in_group && /^[A-Za-z0-9_-]+:$/ {in_group=0}
+    in_group && /^  - / {sub(/^  - /, ""); print}
+  ' "$file")
+  expected_order=$'DediOne-Reality\nDediOne-Trojan\nDediOne-HY2\nDediOne-HY2-Hop'
+  [[ $actual_order == "$expected_order" ]] || die 'main chain order must be Reality, Trojan, HY2, HY2-Hop'
+}
+
+render_main_chain() {
+  local source=$1 output=$2
+  awk '
+    function print_main_chain() {
+      print "proxy-groups:"
+      print "- name: 主链路"
+      print "  type: fallback"
+      print "  proxies:"
+      print "  - DediOne-Reality"
+      print "  - DediOne-Trojan"
+      print "  - DediOne-HY2"
+      print "  - DediOne-HY2-Hop"
+      print "  url: https://www.gstatic.com/generate_204"
+      print "  interval: 60"
+      print "  timeout: 5000"
+      print "  max-failed-times: 2"
+      print "  lazy: false"
+      print "  expected-status: 204"
+    }
+    $0 == "proxy-groups:" {
+      print_main_chain()
+      in_groups=1
+      next
+    }
+    in_groups && /^[A-Za-z0-9_-]+:$/ {in_groups=0}
+    in_groups {next}
+    $0 == "rules:" {
+      in_groups=0
+      in_rules=1
+      print
+      next
+    }
+    in_rules && /^[A-Za-z0-9_-]+:$/ {in_rules=0}
+    in_rules {sub(/,(PROXY|Proxies|OpenAI)$/, ",主链路")}
+    {print}
+  ' "$source" > "$output"
+
+  check_main_chain "$output"
+}
+
 render_subscription() {
   local source=$1 node=$2 output=$3 staged
   staged=$(mktemp "$(dirname -- "$source")/.reality-stage.XXXXXX")
@@ -210,14 +269,9 @@ render_subscription() {
     }
     {print}
   ' "$source" > "$staged"
-  awk '
-    /^- name: (Proxies|OpenAI)$/ {target=1; added=0; print; next}
-    /^- name:/ {target=0}
-    target && !added && $0 == "  - PROXY" {print; print "  - DediOne-Reality"; added=1; next}
-    {print}
-  ' "$staged" > "$output"
+  render_main_chain "$staged" "$output"
   [[ $(grep -c '^- name: DediOne-Reality$' "$output") == 1 ]] || die 'failed to add exactly one Reality node'
-  [[ $(grep -c '^  - DediOne-Reality$' "$output") == 2 ]] || die 'failed to add Reality to Proxies and OpenAI groups'
+  [[ $(grep -c '^  - DediOne-Reality$' "$output") == 1 ]] || die 'failed to make Reality the main candidate'
 }
 
 rollback_partial() {
@@ -310,7 +364,7 @@ install_overlay() {
   write_state
   verify_overlay
   INSTALLING=0
-  log "installed as a candidate on TCP $REALITY_PORT; existing default groups remain first"
+  log "installed as the main candidate on TCP $REALITY_PORT with Trojan and HY2 fallbacks"
 }
 
 status_overlay() {
@@ -335,13 +389,55 @@ verify_overlay() {
   wait_for_listener || die "sing-box is not listening on TCP $REALITY_PORT"
   ufw status | grep -Fq "$UFW_COMMENT" || die 'Reality UFW rule missing'
   [[ $(grep -c '^- name: DediOne-Reality$' "$SUBSCRIPTION_FILE") == 1 ]] || die 'Reality subscription node missing'
-  [[ $(grep -c '^  - DediOne-Reality$' "$SUBSCRIPTION_FILE") == 2 ]] || die 'Reality selector entries missing'
+  check_main_chain "$SUBSCRIPTION_FILE"
   [[ $(sha256_file "$SUBSCRIPTION_FILE") == "$INSTALLED_SUBSCRIPTION_SHA256" ]] || die 'subscription changed after install'
   check_target
   for unit in sing-box.service sing-box-trojan.service nginx.service; do
     systemctl is-active --quiet "$unit" || die "baseline service is not active: $unit"
   done
   log 'verification passed'
+}
+
+simplify_groups() {
+  require_root
+  ((ASSUME_YES == 1)) || die 'simplify requires --yes'
+  acquire_lock
+  load_state
+
+  local current_hash policy_backup staged
+  current_hash=$(sha256_file "$SUBSCRIPTION_FILE")
+  [[ $current_hash == "$INSTALLED_SUBSCRIPTION_SHA256" ]] || die 'subscription changed after Reality install; inspect it before simplifying'
+  policy_backup=$BACKUP_DIR/subscription-before-main-chain.yaml
+
+  if [[ -f $policy_backup ]]; then
+    grep -q '^- name: 主链路$' "$SUBSCRIPTION_FILE" || die 'main-chain backup exists but the live policy is not simplified'
+    log 'subscription groups are already simplified'
+    return 0
+  fi
+
+  staged=$(mktemp "$(dirname -- "$SUBSCRIPTION_FILE")/.main-chain-new.XXXXXX")
+  WORK_FILES+=("$staged")
+  render_main_chain "$SUBSCRIPTION_FILE" "$staged"
+  install -m 0600 "$SUBSCRIPTION_FILE" "$policy_backup"
+  chown "$SUBSCRIPTION_UID:$SUBSCRIPTION_GID" "$staged"
+  chmod "$SUBSCRIPTION_MODE" "$staged"
+  mv -f "$staged" "$SUBSCRIPTION_FILE"
+  INSTALLED_SUBSCRIPTION_SHA256=$(sha256_file "$SUBSCRIPTION_FILE")
+  write_state
+
+  if ! (verify_overlay); then
+    install -o "$SUBSCRIPTION_UID" -g "$SUBSCRIPTION_GID" -m "$SUBSCRIPTION_MODE" \
+      "$policy_backup" "$SUBSCRIPTION_FILE"
+    INSTALLED_SUBSCRIPTION_SHA256=$current_hash
+    write_state
+    rm -f -- "$policy_backup"
+    die 'main-chain verification failed; previous subscription restored'
+  fi
+
+  if [[ $0 != "$CLI_PATH" ]]; then
+    install -m 0755 "$0" "$CLI_PATH"
+  fi
+  log 'simplified to one main chain: Reality -> Trojan -> HY2 -> HY2-Hop'
 }
 
 rollback_overlay() {
@@ -380,9 +476,12 @@ main() {
     install) install_overlay ;;
     status) status_overlay ;;
     verify) verify_overlay ;;
+    simplify) simplify_groups ;;
     rollback) rollback_overlay ;;
     *) die "unknown command: $command" ;;
   esac
 }
 
-main "$@"
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  main "$@"
+fi

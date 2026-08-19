@@ -41,9 +41,9 @@ proxies:
     skip-cert-verify: false
 
 proxy-groups:
-  - name: PROXY
+  - name: 主链路
     type: fallback
-    proxies: [Edge-HY2, Edge-HY2-Hop, Edge-Trojan]
+    proxies: [Edge-Trojan, Edge-HY2, Edge-HY2-Hop]
     url: https://www.gstatic.com/generate_204
     interval: 60
     timeout: 5000
@@ -51,28 +51,20 @@ proxy-groups:
     lazy: false
     expected-status: 204
 
-  - name: Proxies
-    type: select
-    proxies: [PROXY, DIRECT]
-
-  - name: OpenAI
-    type: select
-    proxies: [PROXY]
-
 rules:
-  - DOMAIN-SUFFIX,openai.com,OpenAI
-  - DOMAIN-SUFFIX,chatgpt.com,OpenAI
-  - DOMAIN-SUFFIX,anthropic.com,PROXY
-  - DOMAIN-SUFFIX,claude.ai,PROXY
-  - DOMAIN-SUFFIX,github.com,PROXY
-  - DOMAIN-SUFFIX,githubusercontent.com,PROXY
-  - DOMAIN-SUFFIX,npmjs.org,PROXY
-  - DOMAIN-SUFFIX,pypi.org,PROXY
-  - DOMAIN-SUFFIX,docker.com,PROXY
-  - DOMAIN-SUFFIX,docker.io,PROXY
-  - DOMAIN-SUFFIX,x.com,PROXY
-  - DOMAIN-SUFFIX,twitter.com,PROXY
-  - DOMAIN-SUFFIX,t.me,PROXY
-  - DOMAIN-SUFFIX,telegram.org,PROXY
+  - DOMAIN-SUFFIX,openai.com,主链路
+  - DOMAIN-SUFFIX,chatgpt.com,主链路
+  - DOMAIN-SUFFIX,anthropic.com,主链路
+  - DOMAIN-SUFFIX,claude.ai,主链路
+  - DOMAIN-SUFFIX,github.com,主链路
+  - DOMAIN-SUFFIX,githubusercontent.com,主链路
+  - DOMAIN-SUFFIX,npmjs.org,主链路
+  - DOMAIN-SUFFIX,pypi.org,主链路
+  - DOMAIN-SUFFIX,docker.com,主链路
+  - DOMAIN-SUFFIX,docker.io,主链路
+  - DOMAIN-SUFFIX,x.com,主链路
+  - DOMAIN-SUFFIX,twitter.com,主链路
+  - DOMAIN-SUFFIX,t.me,主链路
+  - DOMAIN-SUFFIX,telegram.org,主链路
   - GEOIP,CN,DIRECT
-  - MATCH,PROXY
+  - MATCH,主链路
