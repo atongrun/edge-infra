@@ -45,3 +45,5 @@ sudo edge-infra-reality simplify --yes
 ```
 
 The command keeps the previous subscription beside the original deployment backup and updates the tracked subscription hash only after the new one-group policy verifies successfully.
+
+Before refreshing Clash Verge, update any local Merge or rule enhancement that still targets `PROXY`, `Proxies`, or `OpenAI` so it targets `主链路`. Otherwise Clash Verge will reject the refreshed subscription even though the subscription itself is valid. Validate the combined configuration, not only the downloaded YAML.
