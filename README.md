@@ -52,32 +52,59 @@ The repository and Git history contain templates and documentation only. Run `./
 
 V1 intentionally fails closed on a host already using these ports or managed paths. It is not an in-place migration tool.
 
-## Quick start
+## For Humans
 
-The fastest path is the interactive one-key installer. It prompts for the
-minimal public inputs, then runs the base installer and the Reality overlay so
-the finished host matches the live topology (`主链路`: Reality → Trojan → HY2 →
-HY2-Hop):
+**Strongly recommended: let an LLM agent install this for you.** The fastest
+path on a new VPS is not to hand-edit several config files: the agent can read
+the full deployment contract, run preflight, ask for the few values humans
+must provide, and verify that the result matches the current `la-vps` topology.
+
+Paste this prompt into Claude Code, Codex, Cursor, Cline, or another capable
+agent running on the new VPS:
+
+```text
+Install and configure edge-infra on this fresh VPS so it matches the current
+la-vps deployment. Follow the complete guide, step by step:
+https://raw.githubusercontent.com/atongrun/edge-infra/main/docs/guide/installation.md
+
+The required final topology is Reality/VLESS Vision first on TCP 9443, then
+Trojan/TLS on TCP 8443, Hysteria2 on UDP 443, and HY2 port hopping on UDP
+20000-20031. The HTTPS subscription is served by nginx on TCP 443. Do not
+claim success until preflight, local verification, and an external client
+smoke test pass. Ask me only for values that cannot be discovered safely
+(domain names, public IPv4, ACME email, and Reality target/SNI if needed).
+Do not pipe an unreviewed remote script into root, do not invent secrets, and
+stop with an actionable diagnosis if any preflight or verification step fails.
+```
+
+If you are deliberately installing without an agent, use the repository's
+reviewed checkout and the one-key entry point. It auto-detects the public IPv4,
+writes root-only configs outside the repository, then runs the base installer
+and Reality overlay:
 
 ```bash
 git clone https://github.com/atongrun/edge-infra.git
 cd edge-infra
-git checkout <release-tag>
+git checkout <reviewed-tag-or-commit>
 sudo ./install.sh
 ```
 
-`install.sh` auto-detects the VPS public IPv4 from the default interface and
-writes root-only configs outside the repository. It asks for:
+It asks for `EDGE_DOMAIN`, `SUB_DOMAIN`, `PUBLIC_IPV4`, `ACME_EMAIL`,
+`REALITY_PORT` (default `9443`), `REALITY_TARGET` (default `dl.google.com`),
+and `REALITY_SERVER_NAME`. Do not pipe a remote script into root.
 
-- `EDGE_DOMAIN` — proxy + ACME certificate FQDN
-- `SUB_DOMAIN` — HTTPS subscription FQDN
-- `PUBLIC_IPV4` — VPS public IPv4 (auto-detected, confirm or override)
-- `ACME_EMAIL` — Let's Encrypt email
-- `REALITY_PORT` — Reality TCP port (default `9443`)
-- `REALITY_TARGET` — Reality steal target, must serve TLS 1.3 + h2 (default `dl.google.com`)
-- `REALITY_SERVER_NAME` — Reality SNI (defaults to the target)
+## For LLM Agents
 
-Do not pipe a remote script into root. Clone a reviewed tag or release locally.
+Fetch the complete guide before changing the host, then follow it step by
+step rather than guessing from this README:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/atongrun/edge-infra/main/docs/guide/installation.md
+```
+
+The guide is also available locally after cloning at
+`docs/guide/installation.md`. It defines the source-of-truth deployment
+contract for reproducing the current `la-vps` layout on a fresh Ubuntu VPS.
 
 ### Non-interactive install
 
@@ -170,6 +197,7 @@ Rollback stops only `edge-infra-*` units, deletes only its own nftables table an
 
 ## Documentation
 
+- [Full installation guide for humans and LLM agents](docs/guide/installation.md)
 - [Architecture and ownership](docs/architecture.md)
 - [Deployment contract](docs/deployment.md)
 - [Reality candidate overlay](docs/reality-candidate.md) — promotes Reality to the front of `主链路`

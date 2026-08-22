@@ -29,6 +29,20 @@ valid_domain() { [[ ${#1} -le 253 && $1 =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za
 valid_port() { [[ $1 =~ ^[0-9]+$ ]] && ((10#$1 >= 1024 && 10#$1 <= 65535)); }
 sha256_file() { sha256sum "$1" | awk '{print $1}'; }
 
+# Resolve the active baseline unit used by either the repo installer or the
+# hand-configured la-vps layout. Callers use the returned name for snapshots
+# and diagnostics instead of assuming one layout.
+resolve_baseline_unit() {
+  local primary=$1 alt=$2
+  if systemctl is-active --quiet "$primary" 2>/dev/null; then
+    printf '%s\n' "$primary"
+  elif systemctl is-active --quiet "$alt" 2>/dev/null; then
+    printf '%s\n' "$alt"
+  else
+    return 1
+  fi
+}
+
 # A baseline proxy service may be named edge-infra-hy2.service (repo installer)
 # or sing-box.service (hand-configured la-vps). Accept either.
 baseline_service_active() {
@@ -116,6 +130,8 @@ write_state() {
     state_value SUBSCRIPTION_UID "$SUBSCRIPTION_UID"
     state_value SUBSCRIPTION_GID "$SUBSCRIPTION_GID"
     state_value BASELINE_SUBSCRIPTION_SHA256 "$BASELINE_SUBSCRIPTION_SHA256"
+    state_value BASELINE_HY2_UNIT "$BASELINE_HY2_UNIT"
+    state_value BASELINE_TROJAN_UNIT "$BASELINE_TROJAN_UNIT"
     state_value INSTALLED_SUBSCRIPTION_SHA256 "${INSTALLED_SUBSCRIPTION_SHA256:-}"
     state_value UFW_RULE_ADDED "${UFW_RULE_ADDED:-0}"
   } > "$STATE_FILE.tmp"
@@ -176,8 +192,8 @@ preflight() {
   [[ ! -e $UNIT_PATH ]] || die "$UNIT_PATH already exists"
   [[ $(systemctl show -p LoadState --value "$UNIT_NAME" 2>/dev/null || true) == not-found ]] || die "$UNIT_NAME is already registered"
   ! port_in_use "$REALITY_PORT" || die "TCP $REALITY_PORT is already in use"
-  baseline_service_active edge-infra-hy2.service sing-box.service || die 'baseline HY2 service is not active (neither edge-infra-hy2.service nor sing-box.service)'
-  baseline_service_active edge-infra-trojan.service sing-box-trojan.service || die 'baseline Trojan service is not active (neither edge-infra-trojan.service nor sing-box-trojan.service)'
+  BASELINE_HY2_UNIT=$(resolve_baseline_unit edge-infra-hy2.service sing-box.service) || die 'baseline HY2 service is not active (neither edge-infra-hy2.service nor sing-box.service)'
+  BASELINE_TROJAN_UNIT=$(resolve_baseline_unit edge-infra-trojan.service sing-box-trojan.service) || die 'baseline Trojan service is not active (neither edge-infra-trojan.service nor sing-box-trojan.service)'
   systemctl is-active --quiet nginx.service || die 'baseline nginx.service is not active'
   check_subscription_contract
   check_target
@@ -337,7 +353,7 @@ install_overlay() {
   install -m 0600 "$SUBSCRIPTION_FILE" "$BACKUP_DIR/subscription.yaml"
   command -v ufw >/dev/null 2>&1 && ufw status numbered > "$BACKUP_DIR/ufw-before.txt" 2>&1 || true
   ss -lntup > "$BACKUP_DIR/listeners-before.txt"
-  systemctl show sing-box.service sing-box-trojan.service nginx.service \
+  systemctl show "$BASELINE_HY2_UNIT" "$BASELINE_TROJAN_UNIT" nginx.service \
     -p Id -p ActiveState -p NRestarts > "$BACKUP_DIR/services-before.txt"
   write_state
 
@@ -467,7 +483,7 @@ rollback_overlay() {
     die 'subscription changed after Reality install; inspect it or use --force intentionally'
   fi
   systemctl disable --now "$UNIT_NAME" >/dev/null 2>&1 || true
-  if [[ $UFW_RULE_ADDED == 1 ]] && ufw status 2>/dev/null | grep -Fq "$UFW_COMMENT"; then
+  if [[ $UFW_RULE_ADDED == 1 ]] && command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -Fq "$UFW_COMMENT"; then
     ufw --force delete allow "$REALITY_PORT/tcp" comment "$UFW_COMMENT"
   fi
   install -o "$SUBSCRIPTION_UID" -g "$SUBSCRIPTION_GID" -m "$SUBSCRIPTION_MODE" \

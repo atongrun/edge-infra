@@ -2,23 +2,21 @@
 
 ## Data plane
 
-Base install (always present):
+The deployed `la-vps` topology is:
 
 ```text
-Edge-HY2       UDP 443          primary
-Edge-HY2-Hop   UDP range        nft redirect -> UDP 443
-Edge-Trojan    TCP 8443         independent TCP/TLS fallback
-Subscription   TCP 443          nginx static YAML
-ACME           TCP 80           Certbot webroot + HTTPS redirect
+DediOne-Reality   TCP 9443         VLESS + Reality + Vision, front candidate
+DediOne-Trojan    TCP 8443         independent TCP/TLS fallback
+DediOne-HY2       UDP 443          primary UDP/QUIC fallback
+DediOne-HY2-Hop   UDP 20000-20031  nft redirect -> UDP 443
+Subscription      TCP 443          nginx static YAML
+ACME              TCP 80           Certbot webroot + HTTPS redirect
 ```
 
-With the optional Reality overlay applied (the live la-vps deployment), one more listener joins the data plane and the published `主链路` is reordered for TCP stability:
-
-```text
-Edge-Reality   TCP 9443         VLESS + Reality + Vision, front candidate
-```
-
-The published subscription exposes one `主链路` fallback group ordered as `Edge-Reality`, `Edge-Trojan`, `Edge-HY2`, then `Edge-HY2-Hop`. Health selection affects new connections; established connections do not migrate seamlessly.
+The published subscription exposes one `主链路` fallback group ordered as
+`DediOne-Reality`, `DediOne-Trojan`, `DediOne-HY2`, then `DediOne-HY2-Hop`.
+Health selection affects new connections; established connections do not
+migrate seamlessly.
 
 HY2 and HY2-Hop remain in the same UDP/QUIC failure domain. Port hopping can work around fixed-port or flow treatment, but the actual heterogeneous fallbacks are the two TCP listeners ahead of them: Reality and Trojan/TLS.
 

@@ -5,10 +5,12 @@
 `sudo ./install.sh` from a reviewed checkout is the supported interactive path.
 It prompts for the minimal public inputs, auto-detects `PUBLIC_IPV4`, writes
 root-only configs outside the repository, then runs the base installer and the
-Reality overlay so the finished host matches the live topology (`主链路`:
-Reality → Trojan → HY2 → HY2-Hop). It is a thin orchestrator over the two
-non-interactive phases below; it does not bypass preflight, rollback safety, or
-the manifest checks.
+Reality overlay so the finished host matches the live `la-vps` topology
+(`主链路`: Reality → Trojan → HY2 → HY2-Hop). It is a thin orchestrator over
+the two non-interactive phases below; it does not bypass preflight, rollback
+safety, or the manifest checks. If the base phase succeeds but the overlay
+phase fails, the host is base-only and must not be reported as fully deployed;
+repair and retry the overlay or deliberately run base rollback.
 
 ## Preflight
 

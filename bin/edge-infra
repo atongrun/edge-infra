@@ -245,7 +245,7 @@ preflight_internal() {
     fi
   done
   [[ ! -e /etc/letsencrypt/live/$EDGE_DOMAIN ]] || die "certificate lineage already exists for $EDGE_DOMAIN"
-  [[ ! -e /usr/local/bin/sing-box ]] || die "/usr/local/bin/sing-box already exists; remove it or pick a different host"
+  check_path_absent /usr/local/bin/sing-box
   if command -v nft >/dev/null 2>&1 && nft list table inet "$NFT_TABLE" >/dev/null 2>&1; then
     die "nftables table already exists: inet $NFT_TABLE"
   fi
@@ -482,6 +482,7 @@ write_manifest() {
     "$NGINX_SITE"
     "$CERT_HOOK"
     "$SING_BOX_ROOT/$SING_BOX_VERSION/sing-box"
+    /usr/local/bin/sing-box
     "$CLI_PATH"
     "$INSTALLED_PROJECT_ROOT/lib/common.sh"
     "$INSTALLED_PROJECT_ROOT/versions.env"
@@ -635,7 +636,11 @@ rollback_internal() {
   safe_remove_tree "$SUB_ROOT" /var/www/edge-infra-subscription
   safe_remove_tree "$ACME_ROOT" /var/www/edge-infra-acme
   safe_remove_tree "$RUNTIME_ROOT" /usr/local/lib/edge-infra
-  [[ -L /usr/local/bin/sing-box ]] && rm -- /usr/local/bin/sing-box
+  if [[ -L /usr/local/bin/sing-box ]]; then
+    [[ $(readlink /usr/local/bin/sing-box) == "$SING_BOX_ROOT/current/sing-box" ]] || \
+      die "refusing to remove unexpected /usr/local/bin/sing-box symlink"
+    rm -- /usr/local/bin/sing-box
+  fi
   [[ -f $CLI_PATH ]] && rm -- "$CLI_PATH"
   if [[ -f $STATE_FILE ]]; then
     cp "$STATE_FILE" "$BACKUP_DIR/removed-state.env" 2>/dev/null || true
@@ -677,6 +682,9 @@ verify_internal() {
   [[ -x $SING_BOX_ROOT/current/sing-box ]] || die "sing-box binary is missing"
   [[ $(readlink -f "$SING_BOX_ROOT/current") == "$SING_BOX_ROOT/$SING_BOX_VERSION" ]] \
     || die "sing-box current symlink points to an unexpected target"
+  [[ -L /usr/local/bin/sing-box ]] || die "sing-box command symlink is missing"
+  [[ $(readlink /usr/local/bin/sing-box) == "$SING_BOX_ROOT/current/sing-box" ]] || \
+    die "sing-box command symlink points to an unexpected target"
   [[ -f $MANIFEST_FILE ]] || die "managed-file manifest is missing"
   sha256sum --check --quiet "$MANIFEST_FILE" || die "managed file checksum verification failed"
   [[ $(stat -c '%a' "$ETC_DIR/secrets.env") == 600 ]] || die "secrets.env permission must be 600"
