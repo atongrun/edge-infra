@@ -29,6 +29,18 @@ valid_domain() { [[ ${#1} -le 253 && $1 =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za
 valid_port() { [[ $1 =~ ^[0-9]+$ ]] && ((10#$1 >= 1024 && 10#$1 <= 65535)); }
 sha256_file() { sha256sum "$1" | awk '{print $1}'; }
 
+# A baseline proxy service may be named edge-infra-hy2.service (repo installer)
+# or sing-box.service (hand-configured la-vps). Accept either.
+baseline_service_active() {
+  local primary=$1 alt=$2
+  systemctl is-active --quiet "$primary" 2>/dev/null && return 0
+  systemctl is-active --quiet "$alt" 2>/dev/null && return 0
+  return 1
+}
+
+# UFW is optional. The overlay only adds/checks a rule when UFW is active.
+ufw_is_active() { command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; }
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -157,17 +169,16 @@ preflight() {
   require_root
   [[ -n $CONFIG_FILE ]] || die '--config is required'
   load_config
-  for command in flock grep jq openssl sha256sum ss stat systemctl timeout ufw; do require_command "$command"; done
+  for command in flock grep jq openssl sha256sum ss stat systemctl timeout; do require_command "$command"; done
   [[ -x $SING_BOX_BIN ]] || die "sing-box binary is missing or not executable: $SING_BOX_BIN"
   [[ ! -e $STATE_FILE ]] || die 'Reality overlay state already exists'
   [[ ! -e $REALITY_CONFIG ]] || die "$REALITY_CONFIG already exists"
   [[ ! -e $UNIT_PATH ]] || die "$UNIT_PATH already exists"
   [[ $(systemctl show -p LoadState --value "$UNIT_NAME" 2>/dev/null || true) == not-found ]] || die "$UNIT_NAME is already registered"
   ! port_in_use "$REALITY_PORT" || die "TCP $REALITY_PORT is already in use"
-  systemctl is-active --quiet sing-box.service || die 'baseline sing-box.service is not active'
-  systemctl is-active --quiet sing-box-trojan.service || die 'baseline sing-box-trojan.service is not active'
+  baseline_service_active edge-infra-hy2.service sing-box.service || die 'baseline HY2 service is not active (neither edge-infra-hy2.service nor sing-box.service)'
+  baseline_service_active edge-infra-trojan.service sing-box-trojan.service || die 'baseline Trojan service is not active (neither edge-infra-trojan.service nor sing-box-trojan.service)'
   systemctl is-active --quiet nginx.service || die 'baseline nginx.service is not active'
-  ufw status | grep -q '^Status: active' || die 'UFW must already be active'
   check_subscription_contract
   check_target
   log "preflight passed: TCP $REALITY_PORT, target $REALITY_TARGET, subscription contract"
@@ -324,7 +335,7 @@ install_overlay() {
   BASELINE_SUBSCRIPTION_SHA256=$(sha256_file "$SUBSCRIPTION_FILE")
   UFW_RULE_ADDED=0
   install -m 0600 "$SUBSCRIPTION_FILE" "$BACKUP_DIR/subscription.yaml"
-  ufw status numbered > "$BACKUP_DIR/ufw-before.txt"
+  command -v ufw >/dev/null 2>&1 && ufw status numbered > "$BACKUP_DIR/ufw-before.txt" 2>&1 || true
   ss -lntup > "$BACKUP_DIR/listeners-before.txt"
   systemctl show sing-box.service sing-box-trojan.service nginx.service \
     -p Id -p ActiveState -p NRestarts > "$BACKUP_DIR/services-before.txt"
@@ -352,8 +363,13 @@ install_overlay() {
   install -m 0644 "$PROJECT_ROOT/templates/systemd/edge-infra-reality.service" "$UNIT_PATH"
   install -m 0755 "$0" "$CLI_PATH"
   systemctl daemon-reload
-  ufw allow "$REALITY_PORT/tcp" comment "$UFW_COMMENT"
-  UFW_RULE_ADDED=1
+  if ufw_is_active; then
+    ufw allow "$REALITY_PORT/tcp" comment "$UFW_COMMENT"
+    UFW_RULE_ADDED=1
+  else
+    UFW_RULE_ADDED=0
+    warn 'UFW is inactive; no host firewall rule was added for the Reality port'
+  fi
   write_state
   systemctl enable --now "$UNIT_NAME"
 
@@ -387,14 +403,16 @@ verify_overlay() {
   systemctl is-active --quiet "$UNIT_NAME" || die 'Reality service is not active'
   systemctl is-enabled --quiet "$UNIT_NAME" || die 'Reality service is not enabled'
   wait_for_listener || die "sing-box is not listening on TCP $REALITY_PORT"
-  ufw status | grep -Fq "$UFW_COMMENT" || die 'Reality UFW rule missing'
+  if ufw_is_active; then
+    ufw status | grep -Fq "$UFW_COMMENT" || die 'Reality UFW rule missing'
+  fi
   [[ $(grep -c '^- name: DediOne-Reality$' "$SUBSCRIPTION_FILE") == 1 ]] || die 'Reality subscription node missing'
   check_main_chain "$SUBSCRIPTION_FILE"
   [[ $(sha256_file "$SUBSCRIPTION_FILE") == "$INSTALLED_SUBSCRIPTION_SHA256" ]] || die 'subscription changed after install'
   check_target
-  for unit in sing-box.service sing-box-trojan.service nginx.service; do
-    systemctl is-active --quiet "$unit" || die "baseline service is not active: $unit"
-  done
+  baseline_service_active edge-infra-hy2.service sing-box.service || die 'baseline HY2 service is not active'
+  baseline_service_active edge-infra-trojan.service sing-box-trojan.service || die 'baseline Trojan service is not active'
+  systemctl is-active --quiet nginx.service || die 'baseline nginx.service is not active'
   log 'verification passed'
 }
 
@@ -449,7 +467,7 @@ rollback_overlay() {
     die 'subscription changed after Reality install; inspect it or use --force intentionally'
   fi
   systemctl disable --now "$UNIT_NAME" >/dev/null 2>&1 || true
-  if [[ $UFW_RULE_ADDED == 1 ]] && ufw status | grep -Fq "$UFW_COMMENT"; then
+  if [[ $UFW_RULE_ADDED == 1 ]] && ufw status 2>/dev/null | grep -Fq "$UFW_COMMENT"; then
     ufw --force delete allow "$REALITY_PORT/tcp" comment "$UFW_COMMENT"
   fi
   install -o "$SUBSCRIPTION_UID" -g "$SUBSCRIPTION_GID" -m "$SUBSCRIPTION_MODE" \
@@ -458,9 +476,9 @@ rollback_overlay() {
   rm -f "$UNIT_PATH" "$REALITY_CONFIG"
   systemctl daemon-reload
   ! port_in_use "$REALITY_PORT" || die "TCP $REALITY_PORT remains occupied"
-  for unit in sing-box.service sing-box-trojan.service nginx.service; do
-    systemctl is-active --quiet "$unit" || die "baseline service is not active after rollback: $unit"
-  done
+  baseline_service_active edge-infra-hy2.service sing-box.service || die 'baseline HY2 service is not active after rollback'
+  baseline_service_active edge-infra-trojan.service sing-box-trojan.service || die 'baseline Trojan service is not active after rollback'
+  systemctl is-active --quiet nginx.service || die 'baseline nginx.service is not active after rollback'
   rm -f "$STATE_FILE" "$CLI_PATH"
   rmdir "$STATE_DIR" 2>/dev/null || true
   log "rollback complete; backup retained at $BACKUP_DIR"

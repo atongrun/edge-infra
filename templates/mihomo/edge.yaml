@@ -1,70 +1,100 @@
+---
 mixed-port: 7890
 allow-lan: false
 mode: rule
 log-level: info
 ipv6: false
-
+unified-delay: true
+tcp-concurrent: true
+proxies:
+- name: DediOne-HY2
+  type: hysteria2
+  server: ${EDGE_DOMAIN}
+  port: 443
+  password: ${HY2_PASSWORD}
+  sni: ${EDGE_DOMAIN}
+  skip-cert-verify: false
+  alpn:
+  - h3
+  udp: true
+  disable-mtu-discovery: true
+- name: DediOne-Trojan
+  type: trojan
+  server: ${EDGE_DOMAIN}
+  port: ${TROJAN_PORT}
+  password: ${TROJAN_PASSWORD}
+  sni: ${EDGE_DOMAIN}
+  skip-cert-verify: false
+  udp: true
+- name: DediOne-HY2-Hop
+  type: hysteria2
+  server: ${EDGE_DOMAIN}
+  port: 443
+  ports: ${HOP_PORT_START}-${HOP_PORT_END}
+  hop-interval: 20
+  password: ${HY2_PASSWORD}
+  sni: ${EDGE_DOMAIN}
+  skip-cert-verify: false
+  alpn:
+  - h3
+  udp: true
+  disable-mtu-discovery: true
+proxy-groups:
+- name: 主链路
+  type: fallback
+  proxies:
+  - DediOne-Trojan
+  - DediOne-HY2
+  - DediOne-HY2-Hop
+  url: https://www.gstatic.com/generate_204
+  interval: 60
+  timeout: 5000
+  max-failed-times: 2
+  lazy: false
+  expected-status: 204
+rules:
+- DOMAIN-SUFFIX,openai.com,主链路
+- DOMAIN-SUFFIX,chatgpt.com,主链路
+- DOMAIN-SUFFIX,oaistatic.com,主链路
+- DOMAIN-SUFFIX,oaiusercontent.com,主链路
+- DOMAIN-SUFFIX,anthropic.com,主链路
+- DOMAIN-SUFFIX,claude.ai,主链路
+- DOMAIN-SUFFIX,claude.com,主链路
+- DOMAIN-SUFFIX,claudeusercontent.com,主链路
+- DOMAIN-SUFFIX,github.com,主链路
+- DOMAIN-SUFFIX,githubusercontent.com,主链路
+- DOMAIN-SUFFIX,githubassets.com,主链路
+- DOMAIN-SUFFIX,npmjs.org,主链路
+- DOMAIN-SUFFIX,npmjs.com,主链路
+- DOMAIN-SUFFIX,pypi.org,主链路
+- DOMAIN-SUFFIX,pythonhosted.org,主链路
+- DOMAIN-SUFFIX,docker.com,主链路
+- DOMAIN-SUFFIX,docker.io,主链路
+- DOMAIN-SUFFIX,dockerusercontent.com,主链路
+- DOMAIN-SUFFIX,x.com,主链路
+- DOMAIN-SUFFIX,twitter.com,主链路
+- DOMAIN-SUFFIX,t.co,主链路
+- DOMAIN-SUFFIX,twimg.com,主链路
+- DOMAIN-SUFFIX,t.me,主链路
+- DOMAIN-SUFFIX,telegram.org,主链路
+- DOMAIN-SUFFIX,telegram.me,主链路
+- DOMAIN-SUFFIX,telegram-cdn.org,主链路
+- DOMAIN-SUFFIX,tdesktop.com,主链路
+- GEOIP,CN,DIRECT
+- MATCH,主链路
 profile:
   store-selected: true
-
-proxies:
-  - name: Edge-HY2
-    type: hysteria2
-    server: ${EDGE_DOMAIN}
-    port: 443
-    password: ${HY2_PASSWORD}
-    sni: ${EDGE_DOMAIN}
-    alpn: [h3]
-    udp: true
-    disable-mtu-discovery: true
-
-  - name: Edge-HY2-Hop
-    type: hysteria2
-    server: ${EDGE_DOMAIN}
-    port: 443
-    ports: ${HOP_PORT_START}-${HOP_PORT_END}
-    hop-interval: 20
-    password: ${HY2_PASSWORD}
-    sni: ${EDGE_DOMAIN}
-    alpn: [h3]
-    udp: true
-    disable-mtu-discovery: true
-
-  - name: Edge-Trojan
-    type: trojan
-    server: ${EDGE_DOMAIN}
-    port: ${TROJAN_PORT}
-    password: ${TROJAN_PASSWORD}
-    sni: ${EDGE_DOMAIN}
-    alpn: [http/1.1]
-    udp: true
-    skip-cert-verify: false
-
-proxy-groups:
-  - name: 主链路
-    type: fallback
-    proxies: [Edge-Trojan, Edge-HY2, Edge-HY2-Hop]
-    url: https://www.gstatic.com/generate_204
-    interval: 60
-    timeout: 5000
-    max-failed-times: 2
-    lazy: false
-    expected-status: 204
-
-rules:
-  - DOMAIN-SUFFIX,openai.com,主链路
-  - DOMAIN-SUFFIX,chatgpt.com,主链路
-  - DOMAIN-SUFFIX,anthropic.com,主链路
-  - DOMAIN-SUFFIX,claude.ai,主链路
-  - DOMAIN-SUFFIX,github.com,主链路
-  - DOMAIN-SUFFIX,githubusercontent.com,主链路
-  - DOMAIN-SUFFIX,npmjs.org,主链路
-  - DOMAIN-SUFFIX,pypi.org,主链路
-  - DOMAIN-SUFFIX,docker.com,主链路
-  - DOMAIN-SUFFIX,docker.io,主链路
-  - DOMAIN-SUFFIX,x.com,主链路
-  - DOMAIN-SUFFIX,twitter.com,主链路
-  - DOMAIN-SUFFIX,t.me,主链路
-  - DOMAIN-SUFFIX,telegram.org,主链路
-  - GEOIP,CN,DIRECT
-  - MATCH,主链路
+dns:
+  enable: true
+  ipv6: false
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  default-nameserver:
+  - 223.5.5.5
+  - 119.29.29.29
+  nameserver:
+  - https://dns.alidns.com/dns-query
+  - https://doh.pub/dns-query
+  proxy-server-nameserver:
+  - https://dns.alidns.com/dns-query
+  - https://doh.pub/dns-query

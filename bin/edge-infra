@@ -245,6 +245,7 @@ preflight_internal() {
     fi
   done
   [[ ! -e /etc/letsencrypt/live/$EDGE_DOMAIN ]] || die "certificate lineage already exists for $EDGE_DOMAIN"
+  [[ ! -e /usr/local/bin/sing-box ]] || die "/usr/local/bin/sing-box already exists; remove it or pick a different host"
   if command -v nft >/dev/null 2>&1 && nft list table inet "$NFT_TABLE" >/dev/null 2>&1; then
     die "nftables table already exists: inet $NFT_TABLE"
   fi
@@ -362,6 +363,7 @@ install_sing_box() {
   install -d -m 0755 "$SING_BOX_ROOT/$SING_BOX_VERSION"
   install -m 0755 "$archive_dir/sing-box" "$SING_BOX_ROOT/$SING_BOX_VERSION/sing-box"
   ln -s "$SING_BOX_ROOT/$SING_BOX_VERSION" "$SING_BOX_ROOT/current"
+  ln -s "$SING_BOX_ROOT/current/sing-box" /usr/local/bin/sing-box
   "$SING_BOX_ROOT/current/sing-box" version | grep -Fq "$SING_BOX_VERSION" || die "installed sing-box version check failed"
   cleanup_download_tmp "$tmpdir" || die "temporary download cleanup failed"
   DOWNLOAD_TMPDIR=''
@@ -633,6 +635,7 @@ rollback_internal() {
   safe_remove_tree "$SUB_ROOT" /var/www/edge-infra-subscription
   safe_remove_tree "$ACME_ROOT" /var/www/edge-infra-acme
   safe_remove_tree "$RUNTIME_ROOT" /usr/local/lib/edge-infra
+  [[ -L /usr/local/bin/sing-box ]] && rm -- /usr/local/bin/sing-box
   [[ -f $CLI_PATH ]] && rm -- "$CLI_PATH"
   if [[ -f $STATE_FILE ]]; then
     cp "$STATE_FILE" "$BACKUP_DIR/removed-state.env" 2>/dev/null || true

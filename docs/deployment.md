@@ -1,5 +1,15 @@
 # Deployment contract
 
+## One-key install
+
+`sudo ./install.sh` from a reviewed checkout is the supported interactive path.
+It prompts for the minimal public inputs, auto-detects `PUBLIC_IPV4`, writes
+root-only configs outside the repository, then runs the base installer and the
+Reality overlay so the finished host matches the live topology (`主链路`:
+Reality → Trojan → HY2 → HY2-Hop). It is a thin orchestrator over the two
+non-interactive phases below; it does not bypass preflight, rollback safety, or
+the manifest checks.
+
 ## Preflight
 
 `edge-infra preflight` is read-only and is called again by `install`. It requires:
@@ -21,7 +31,7 @@ After `--yes`, installation performs these ordered phases:
 
 1. Capture listeners, packages, systemd, UFW and nftables evidence under a root-only timestamped backup.
 2. Install required packages from Ubuntu APT repositories.
-3. Download the pinned official sing-box release over HTTPS and verify its pinned SHA256.
+3. Download the pinned official sing-box release over HTTPS and verify its pinned SHA256, then symlink `/usr/local/bin/sing-box` to the pinned binary so the optional Reality overlay can locate it.
 4. Generate HY2/Trojan passwords and a 192-bit subscription path token.
 5. Render root-only sing-box configs, Mihomo subscription, nftables and systemd units.
 6. When UFW is active, open only comment-scoped TCP 80 before ACME; bootstrap nginx, obtain a SAN certificate with Certbot webroot HTTP-01, then render the final HTTPS site.

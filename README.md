@@ -54,15 +54,35 @@ V1 intentionally fails closed on a host already using these ports or managed pat
 
 ## Quick start
 
-Do not pipe a remote script into root. Clone a reviewed tag or release locally:
+The fastest path is the interactive one-key installer. It prompts for the
+minimal public inputs, then runs the base installer and the Reality overlay so
+the finished host matches the live topology (`主链路`: Reality → Trojan → HY2 →
+HY2-Hop):
 
 ```bash
 git clone https://github.com/atongrun/edge-infra.git
 cd edge-infra
 git checkout <release-tag>
+sudo ./install.sh
 ```
 
-Create a root-only config outside the repository:
+`install.sh` auto-detects the VPS public IPv4 from the default interface and
+writes root-only configs outside the repository. It asks for:
+
+- `EDGE_DOMAIN` — proxy + ACME certificate FQDN
+- `SUB_DOMAIN` — HTTPS subscription FQDN
+- `PUBLIC_IPV4` — VPS public IPv4 (auto-detected, confirm or override)
+- `ACME_EMAIL` — Let's Encrypt email
+- `REALITY_PORT` — Reality TCP port (default `9443`)
+- `REALITY_TARGET` — Reality steal target, must serve TLS 1.3 + h2 (default `dl.google.com`)
+- `REALITY_SERVER_NAME` — Reality SNI (defaults to the target)
+
+Do not pipe a remote script into root. Clone a reviewed tag or release locally.
+
+### Non-interactive install
+
+For automation, skip `install.sh` and drive the two phases directly with config
+files. Create a root-only config outside the repository:
 
 ```bash
 sudo install -m 0600 env/install.env.example /root/edge-infra.env
@@ -85,11 +105,21 @@ sudo ./bin/edge-infra preflight --config /root/edge-infra.env
 sudo ./bin/edge-infra install --config /root/edge-infra.env --yes
 ```
 
+Then add the Reality overlay with a second root-only config from
+`env/reality.env.example` (point `SUBSCRIPTION_FILE` at the generated
+subscription under `/var/www/edge-infra-subscription/`):
+
+```bash
+sudo ./scripts/reality-overlay.sh preflight --config /root/reality.env
+sudo ./scripts/reality-overlay.sh install   --config /root/reality.env --yes
+```
+
 After installation:
 
 ```bash
 sudo edge-infra status
 sudo edge-infra verify
+sudo edge-infra-reality verify
 sudo edge-infra health
 ```
 
@@ -123,6 +153,7 @@ Managed paths:
 /var/www/edge-infra-{acme,subscription}/
 /usr/local/lib/edge-infra/
 /usr/local/sbin/edge-infra
+/usr/local/bin/sing-box -> /usr/local/lib/edge-infra/sing-box/current/sing-box
 ```
 
 The installer also creates one Let's Encrypt certificate lineage named after `EDGE_DOMAIN`. OS packages installed from APT are intentionally left installed during rollback because removing shared packages is unsafe.
