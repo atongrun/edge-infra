@@ -2,17 +2,30 @@
 
 Auditable, rollback-oriented personal edge infrastructure for a fresh Ubuntu VPS.
 
-`edge-infra` deploys one deliberately small architecture:
+`edge-infra` deploys one deliberately small architecture. The base install runs three proxy listeners; the optional Reality overlay promotes a fourth, TCP-stable candidate to the front of the published `主链路`.
+
+Base install (always present):
 
 ```text
-Mihomo fallback
-  1. Hysteria2          UDP 443
-  2. Hysteria2 Hop      UDP 20000-20031 -> UDP 443
-  3. Trojan/TLS         TCP 8443
+Hysteria2               UDP 443
+Hysteria2 Hop           UDP 20000-20031 -> UDP 443 (nft redirect)
+Trojan/TLS              TCP 8443
 
 HTTPS subscription      nginx TCP 443
 ACME + redirect         nginx TCP 80
 ```
+
+With the optional Reality overlay applied (the live la-vps deployment), the published `主链路` fallback group is ordered for TCP stability first:
+
+```text
+Mihomo 主链路 fallback
+  1. Reality/Vision     TCP 9443   (added by the overlay, front candidate)
+  2. Trojan/TLS         TCP 8443   (first heterogeneous fallback)
+  3. Hysteria2          UDP 443    (performance backup)
+  4. Hysteria2 Hop      UDP 20000-20031 -> UDP 443
+```
+
+HY2 and HY2-Hop stay in the same UDP/QUIC failure domain; Reality and Trojan provide the heterogeneous TCP fallbacks ahead of them.
 
 It is a personal single-user deployment, not a panel, multi-user proxy service, billing system, or protocol collection.
 
@@ -128,7 +141,7 @@ Rollback stops only `edge-infra-*` units, deletes only its own nftables table an
 
 - [Architecture and ownership](docs/architecture.md)
 - [Deployment contract](docs/deployment.md)
-- [Optional Reality candidate overlay](docs/reality-candidate.md)
+- [Reality candidate overlay](docs/reality-candidate.md) — promotes Reality to the front of `主链路`
 - [Rollback and uninstall](docs/rollback.md)
 - [Security model](docs/security.md)
 - [Testing and release gates](docs/testing.md)
