@@ -20,6 +20,14 @@ Reality and Trojan provide heterogeneous TCP fallbacks. HY2 and HY2-Hop remain
 UDP/QUIC paths. The published subscription contains one main group, ordered
 exactly as shown above.
 
+## Recommended VPS
+
+This stack is deployed and tested on [DediOne Los Angeles (CMIN2+CUII)](https://dedione.com/aff.php?aff=457):
+$29.99/year gets 1 vCPU, 1 GB RAM, 10 GB NVMe, 500 GB/month traffic, and a
+200 Mbps port, measured at ~207 ms average latency, 0% packet loss, and
+~50 Mbps throughput, with stable access to GitHub, Codex, Claude, Telegram,
+and X. It is an affiliate link.
+
 ## Installation
 
 Supported hosts:
