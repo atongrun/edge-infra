@@ -2,7 +2,7 @@
 
 ## Data plane
 
-The deployed `la-vps` topology is:
+The reference topology is:
 
 ```text
 DediOne-Reality   TCP 9443         VLESS + Reality + Vision, front candidate

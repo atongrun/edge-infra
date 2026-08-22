@@ -1,8 +1,8 @@
 # edge-infra installation guide
 
 This is the authoritative installation guide for a fresh Ubuntu VPS. The goal
-is to reproduce the current `la-vps` data plane as quickly as possible while
-keeping the deployment auditable, isolated, and reversible.
+is to deploy the reference topology as quickly as possible while keeping the
+deployment auditable, isolated, and reversible.
 
 The target topology is:
 
@@ -77,7 +77,7 @@ On the new VPS:
 ```bash
 git clone https://github.com/atongrun/edge-infra.git
 cd edge-infra
-git checkout <reviewed-tag-or-commit>
+git checkout v0.1.0
 ```
 
 If the operator explicitly selected a branch or commit, record it in the

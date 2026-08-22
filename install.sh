@@ -2,12 +2,12 @@
 # Interactive one-key installer for edge-infra.
 #
 # Prompts for the minimal public inputs, then runs the base installer and the
-# Reality overlay so the finished host matches the live la-vps topology:
+# Reality overlay so the finished host matches the reference topology:
 #   主链路 fallback: Reality -> Trojan -> HY2 -> HY2-Hop
 #
 # Run from a reviewed checkout:
 #   git clone https://github.com/atongrun/edge-infra.git
-#   cd edge-infra && git checkout <release-tag>
+#   cd edge-infra && git checkout v0.1.0
 #   sudo ./install.sh
 set -Eeuo pipefail
 

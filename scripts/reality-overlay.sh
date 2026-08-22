@@ -30,8 +30,8 @@ valid_port() { [[ $1 =~ ^[0-9]+$ ]] && ((10#$1 >= 1024 && 10#$1 <= 65535)); }
 sha256_file() { sha256sum "$1" | awk '{print $1}'; }
 
 # Resolve the active baseline unit used by either the repo installer or the
-# hand-configured la-vps layout. Callers use the returned name for snapshots
-# and diagnostics instead of assuming one layout.
+# hand-configured layout. Callers use the returned name for snapshots and
+# diagnostics instead of assuming one layout.
 resolve_baseline_unit() {
   local primary=$1 alt=$2
   if systemctl is-active --quiet "$primary" 2>/dev/null; then
@@ -44,7 +44,7 @@ resolve_baseline_unit() {
 }
 
 # A baseline proxy service may be named edge-infra-hy2.service (repo installer)
-# or sing-box.service (hand-configured la-vps). Accept either.
+# or sing-box.service (hand-configured layout). Accept either.
 baseline_service_active() {
   local primary=$1 alt=$2
   systemctl is-active --quiet "$primary" 2>/dev/null && return 0

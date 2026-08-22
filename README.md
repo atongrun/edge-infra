@@ -1,145 +1,88 @@
 # edge-infra
 
-Auditable, rollback-oriented personal edge infrastructure for a fresh Ubuntu VPS.
+A small, auditable proxy stack for a fresh Ubuntu VPS. It deploys a single
+user Mihomo subscription with a TCP-first fallback chain.
 
-`edge-infra` deploys one deliberately small architecture. The base install runs three proxy listeners; the optional Reality overlay promotes a fourth, TCP-stable candidate to the front of the published `主链路`.
-
-Base install (always present):
-
-```text
-Hysteria2               UDP 443
-Hysteria2 Hop           UDP 20000-20031 -> UDP 443 (nft redirect)
-Trojan/TLS              TCP 8443
-
-HTTPS subscription      nginx TCP 443
-ACME + redirect         nginx TCP 80
-```
-
-With the optional Reality overlay applied (the live la-vps deployment), the published `主链路` fallback group is ordered for TCP stability first:
+## Architecture
 
 ```text
 Mihomo 主链路 fallback
-  1. Reality/Vision     TCP 9443   (added by the overlay, front candidate)
-  2. Trojan/TLS         TCP 8443   (first heterogeneous fallback)
-  3. Hysteria2          UDP 443    (performance backup)
-  4. Hysteria2 Hop      UDP 20000-20031 -> UDP 443
+  1. DediOne-Reality   VLESS + Reality + Vision   TCP 9443
+  2. DediOne-Trojan    Trojan/TLS                TCP 8443
+  3. DediOne-HY2       Hysteria2                 UDP 443
+  4. DediOne-HY2-Hop   Hysteria2 port hopping    UDP 20000-20031 -> UDP 443
+
+HTTPS subscription    nginx                    TCP 443
+ACME challenge        nginx                    TCP 80
 ```
 
-HY2 and HY2-Hop stay in the same UDP/QUIC failure domain; Reality and Trojan provide the heterogeneous TCP fallbacks ahead of them.
+Reality and Trojan provide heterogeneous TCP fallbacks. HY2 and HY2-Hop remain
+UDP/QUIC paths. The published subscription contains one main group, ordered
+exactly as shown above.
 
-It is a personal single-user deployment, not a panel, multi-user proxy service, billing system, or protocol collection.
+## Installation
 
-## Safety status
+Supported hosts:
 
-- Production passwords and the subscription bearer path are generated on the VPS with `openssl rand`.
-- Secrets are stored only in `/etc/edge-infra/secrets.env` with mode `0600`.
-- sing-box is downloaded from the official SagerNet GitHub Release at a pinned version and verified against pinned SHA256 values.
-- Ubuntu packages come from configured APT repositories; no author-controlled endpoint returns root shell code.
-- Preflight fails on occupied ports, existing managed paths, existing certificate lineage, ambiguous network interfaces, DNS mismatch, or firewall/SSH uncertainty.
-- nftables changes are isolated in `table inet edge_infra_hy2_hopping`; the installer never flushes the global ruleset or enables the global nftables service.
-- Services remain isolated as separate systemd units.
+- Ubuntu 22.04 or 24.04;
+- amd64 or arm64;
+- a fresh VPS with root or sudo access;
+- two DNS A records pointing only to the VPS public IPv4;
+- TCP 80, 443, 8443 and 9443, plus UDP 443 and 20000-20031 available.
 
-The repository and Git history contain templates and documentation only. Run `./scripts/verify.sh` to repeat the public-readiness secret scan.
+### For Humans
 
-## Supported hosts
-
-- Ubuntu 22.04 or 24.04
-- amd64 or arm64
-- A fresh VPS with root or sudo access
-- One unambiguous default IPv4 interface
-- Two DNS names, each with exactly one A record resolving to the VPS IPv4 address
-- Inbound TCP 80/443/8443 and UDP 443/20000-20031 available
-
-V1 intentionally fails closed on a host already using these ports or managed paths. It is not an in-place migration tool.
-
-## For Humans
-
-**Strongly recommended: let an LLM agent install this for you.** The fastest
-path on a new VPS is not to hand-edit several config files: the agent can read
-the full deployment contract, run preflight, ask for the few values humans
-must provide, and verify that the result matches the current `la-vps` topology.
+**Strongly recommended: let an LLM agent install this for you.** It can read
+the complete guide, run preflight, ask for the required public values, and
+verify the deployment without relying on manually edited configuration files.
 
 Paste this prompt into Claude Code, Codex, Cursor, Cline, or another capable
 agent running on the new VPS:
 
 ```text
-Install and configure edge-infra on this fresh VPS so it matches the current
-la-vps deployment. Follow the complete guide, step by step:
-https://raw.githubusercontent.com/atongrun/edge-infra/main/docs/guide/installation.md
+Install and configure edge-infra on this fresh VPS. Read and follow the full
+installation guide step by step:
+https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.0/docs/guide/installation.md
 
-The required final topology is Reality/VLESS Vision first on TCP 9443, then
-Trojan/TLS on TCP 8443, Hysteria2 on UDP 443, and HY2 port hopping on UDP
-20000-20031. The HTTPS subscription is served by nginx on TCP 443. Do not
-claim success until preflight, local verification, and an external client
-smoke test pass. Ask me only for values that cannot be discovered safely
-(domain names, public IPv4, ACME email, and Reality target/SNI if needed).
-Do not pipe an unreviewed remote script into root, do not invent secrets, and
-stop with an actionable diagnosis if any preflight or verification step fails.
+Deploy the complete topology: DediOne-Reality first on TCP 9443,
+DediOne-Trojan on TCP 8443, DediOne-HY2 on UDP 443, and DediOne-HY2-Hop on
+UDP 20000-20031. Serve the HTTPS subscription through nginx on TCP 443.
+Run preflight before every mutating phase. Do not claim success until local
+verification and an external client smoke test pass. Ask me only for values
+that cannot be discovered safely, such as domain names, public IPv4, and ACME
+email. Do not invent secrets or pipe an unreviewed remote script into root.
+If anything fails, stop and report the exact error and the safest recovery
+command.
 ```
 
-If you are deliberately installing without an agent, use the repository's
-reviewed checkout and the one-key entry point. It auto-detects the public IPv4,
-writes root-only configs outside the repository, then runs the base installer
-and Reality overlay:
+If you prefer to run the installer yourself:
 
 ```bash
 git clone https://github.com/atongrun/edge-infra.git
 cd edge-infra
-git checkout <reviewed-tag-or-commit>
+git checkout v0.1.0
 sudo ./install.sh
 ```
 
-It asks for `EDGE_DOMAIN`, `SUB_DOMAIN`, `PUBLIC_IPV4`, `ACME_EMAIL`,
-`REALITY_PORT` (default `9443`), `REALITY_TARGET` (default `dl.google.com`),
-and `REALITY_SERVER_NAME`. Do not pipe a remote script into root.
+The installer asks for the two domain names, public IPv4, ACME email, and
+Reality target/SNI. It generates passwords and Reality credentials locally on
+the VPS, writes root-only configuration files, runs both installation phases,
+and prints the subscription URL after verification.
 
-## For LLM Agents
+### For LLM Agents
 
-Fetch the complete guide before changing the host, then follow it step by
-step rather than guessing from this README:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/atongrun/edge-infra/main/docs/guide/installation.md
-```
-
-The guide is also available locally after cloning at
-`docs/guide/installation.md`. It defines the source-of-truth deployment
-contract for reproducing the current `la-vps` layout on a fresh Ubuntu VPS.
-
-### Non-interactive install
-
-For automation, skip `install.sh` and drive the two phases directly with config
-files. Create a root-only config outside the repository:
+Fetch the exact installation guide for the reviewed revision, then follow it
+step by step:
 
 ```bash
-sudo install -m 0600 env/install.env.example /root/edge-infra.env
-sudo editor /root/edge-infra.env
+curl -fsSL https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.0/docs/guide/installation.md
 ```
 
-The config contains only public deployment inputs:
+After cloning, the same guide is available at
+`docs/guide/installation.md`. Do not guess the deployment procedure from a
+partial README or skip preflight and verification.
 
-```ini
-EDGE_DOMAIN=edge.example.com
-SUB_DOMAIN=sub.example.com
-PUBLIC_IPV4=203.0.113.10
-ACME_EMAIL=admin@example.com
-```
-
-Run the same preflight used by installation, review its output, then install:
-
-```bash
-sudo ./bin/edge-infra preflight --config /root/edge-infra.env
-sudo ./bin/edge-infra install --config /root/edge-infra.env --yes
-```
-
-Then add the Reality overlay with a second root-only config from
-`env/reality.env.example` (point `SUBSCRIPTION_FILE` at the generated
-subscription under `/var/www/edge-infra-subscription/`):
-
-```bash
-sudo ./scripts/reality-overlay.sh preflight --config /root/reality.env
-sudo ./scripts/reality-overlay.sh install   --config /root/reality.env --yes
-```
+## Verification
 
 After installation:
 
@@ -150,70 +93,53 @@ sudo edge-infra-reality verify
 sudo edge-infra health
 ```
 
-`status` prints the generated subscription URL. Treat that URL as a credential: its random path exposes the generated node passwords to anyone who has it.
+Import the printed subscription URL into Mihomo/Clash Verge and perform an
+external smoke test. Treat the URL as a credential: do not commit it or expose
+it in logs.
 
-## Lifecycle CLI
+The repository checks can be run before deployment:
 
-| Command | Purpose |
-|---|---|
-| `preflight --config FILE` | Read-only host, DNS, SSH, port, firewall and conflict checks |
-| `install --config FILE --yes` | Backup, install, render, issue TLS, start and verify |
-| `status` | Show installed topology and systemd state without passwords |
-| `verify` | Check file integrity, configs, listeners, services, nftables and local HTTPS |
-| `health` | Add DNS, certificate lifetime, TLS and restart/error counters |
-| `rollback --yes` | Remove the last edge-infra transaction and retain its backup |
-| `uninstall --yes` | Alias for rollback |
-
-If a managed file changed after installation, rollback fails closed. Review the changes and use `--force` only when removal is intentional.
-
-## What installation changes
-
-Managed paths:
-
-```text
-/etc/edge-infra/
-/etc/systemd/system/edge-infra-*.service
-/etc/nginx/sites-{available,enabled}/edge-infra.conf
-/etc/letsencrypt/renewal-hooks/deploy/edge-infra
-/var/lib/edge-infra/
-/var/backups/edge-infra/<timestamp>/
-/var/www/edge-infra-{acme,subscription}/
-/usr/local/lib/edge-infra/
-/usr/local/sbin/edge-infra
-/usr/local/bin/sing-box -> /usr/local/lib/edge-infra/sing-box/current/sing-box
+```bash
+./scripts/verify.sh
+./tests/run.sh
 ```
 
-The installer also creates one Let's Encrypt certificate lineage named after `EDGE_DOMAIN`. OS packages installed from APT are intentionally left installed during rollback because removing shared packages is unsafe.
-
-If UFW is already active, the installer first proves the current SSH allow rule, then adds only comment-scoped `edge-infra` rules. If UFW is inactive, it remains inactive and no host firewall rules are added. Provider security groups remain the operator's responsibility.
-
 ## Rollback
+
+Remove only the Reality overlay:
+
+```bash
+sudo edge-infra-reality rollback --yes
+```
+
+Remove the complete deployment:
 
 ```bash
 sudo edge-infra rollback --yes
 ```
 
-Rollback stops only `edge-infra-*` units, deletes only its own nftables table and UFW comments, removes its generated certificate/configuration, restores the nginx default symlink when the transaction removed it, and preserves `/var/backups/edge-infra/<timestamp>/` for audit.
+Rollback preserves timestamped backups and fails closed if managed files were
+changed after installation. Use `--force` only after reviewing such changes.
+
+## Security properties
+
+- Secrets are generated on the VPS and stored root-only.
+- sing-box is downloaded from the official release and checked against pinned
+  SHA256 values.
+- Preflight fails closed on occupied ports, conflicting managed paths, DNS
+  mismatch, and firewall/SSH uncertainty.
+- nftables changes use an isolated table and never flush the global ruleset.
+- The installer does not use `curl | sh`.
 
 ## Documentation
 
-- [Full installation guide for humans and LLM agents](docs/guide/installation.md)
+- [Full installation guide](docs/guide/installation.md)
 - [Architecture and ownership](docs/architecture.md)
 - [Deployment contract](docs/deployment.md)
-- [Reality candidate overlay](docs/reality-candidate.md) — promotes Reality to the front of `主链路`
-- [Rollback and uninstall](docs/rollback.md)
+- [Reality overlay](docs/reality-candidate.md)
+- [Rollback](docs/rollback.md)
 - [Security model](docs/security.md)
-- [Testing and release gates](docs/testing.md)
 - [Troubleshooting](docs/troubleshooting.md)
-
-## Non-goals
-
-- Web UI or management panel
-- Multi-user accounts or traffic accounting
-- Automatic SSH changes
-- Global nftables ownership
-- Aggressive sysctl, congestion-control, GRO or MTU tuning
-- Automatic migration of an existing proxy/nginx deployment
 
 ## License
 
