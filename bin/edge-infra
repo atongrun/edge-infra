@@ -27,13 +27,19 @@ RUNTIME_ROOT=/usr/local/lib/edge-infra
 INSTALLED_PROJECT_ROOT=$RUNTIME_ROOT/project
 SING_BOX_ROOT=$RUNTIME_ROOT/sing-box
 CLI_PATH=/usr/local/sbin/edge-infra
+TRAFFIC_CLI_PATH=/usr/local/sbin/edge-infra-traffic
 NGINX_SITE=/etc/nginx/sites-available/edge-infra.conf
 NGINX_LINK=/etc/nginx/sites-enabled/edge-infra.conf
+TRAFFIC_SNIPPET_DIR=/etc/nginx/snippets/edge-infra-traffic
+TRAFFIC_SNIPPET=$TRAFFIC_SNIPPET_DIR/subscription-userinfo.conf
+TRAFFIC_TOTAL_BYTES=536870912000
 CERT_HOOK=/etc/letsencrypt/renewal-hooks/deploy/edge-infra
 SUB_ROOT=/var/www/edge-infra-subscription
 ACME_ROOT=/var/www/edge-infra-acme
 NFT_TABLE=edge_infra_hy2_hopping
 UNITS=(edge-infra-hy2.service edge-infra-trojan.service edge-infra-port-hopping.service)
+TRAFFIC_SERVICE=edge-infra-traffic.service
+TRAFFIC_TIMER=edge-infra-traffic.timer
 
 CONFIG_FILE=''
 ASSUME_YES=0
@@ -233,12 +239,20 @@ preflight_internal() {
   check_path_absent "$ETC_DIR"
   check_path_absent "$RUNTIME_ROOT"
   check_path_absent "$CLI_PATH"
+  check_path_absent "$TRAFFIC_CLI_PATH"
   check_path_absent "$NGINX_SITE"
   check_path_absent "$NGINX_LINK"
   check_path_absent "$CERT_HOOK"
   check_path_absent "$SUB_ROOT"
   check_path_absent "$ACME_ROOT"
+  check_path_absent "$TRAFFIC_SNIPPET_DIR"
   for unit in "${UNITS[@]}"; do
+    check_path_absent "/etc/systemd/system/$unit"
+    if systemctl list-unit-files "$unit" --no-legend 2>/dev/null | grep -q .; then
+      die "systemd unit already registered: $unit"
+    fi
+  done
+  for unit in "$TRAFFIC_SERVICE" "$TRAFFIC_TIMER"; do
     check_path_absent "/etc/systemd/system/$unit"
     if systemctl list-unit-files "$unit" --no-legend 2>/dev/null | grep -q .; then
       die "systemd unit already registered: $unit"
@@ -298,6 +312,9 @@ write_state() {
     state_value NGINX_WAS_ACTIVE "$NGINX_WAS_ACTIVE"
     state_value NGINX_WAS_ENABLED "$NGINX_WAS_ENABLED"
     state_value NGINX_DEFAULT_REMOVED "$NGINX_DEFAULT_REMOVED"
+    state_value VNSTAT_WAS_INSTALLED "$VNSTAT_WAS_INSTALLED"
+    state_value VNSTAT_WAS_ACTIVE "$VNSTAT_WAS_ACTIVE"
+    state_value VNSTAT_WAS_ENABLED "$VNSTAT_WAS_ENABLED"
     state_value CERT_CREATED "$CERT_CREATED"
     state_value SING_BOX_VERSION "$SING_BOX_VERSION"
   } > "$STATE_FILE.tmp"
@@ -334,7 +351,7 @@ install_packages() {
   log "installing Ubuntu repository packages"
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y --no-install-recommends ca-certificates certbot curl iproute2 jq nftables nginx openssl tar
+  apt-get install -y --no-install-recommends ca-certificates certbot curl iproute2 jq nftables nginx openssl tar vnstat
 }
 
 install_project_tooling() {
@@ -344,7 +361,9 @@ install_project_tooling() {
   install -m 0644 "$PROJECT_ROOT/versions.env" "$INSTALLED_PROJECT_ROOT/versions.env"
   install -m 0755 "$PROJECT_ROOT/bin/edge-infra" "$INSTALLED_PROJECT_ROOT/bin/edge-infra"
   install -m 0755 "$PROJECT_ROOT/scripts/hopping-stop.sh" "$INSTALLED_PROJECT_ROOT/scripts/hopping-stop.sh"
+  install -m 0755 "$PROJECT_ROOT/scripts/traffic-header.sh" "$INSTALLED_PROJECT_ROOT/scripts/traffic-header.sh"
   install -m 0755 "$PROJECT_ROOT/bin/edge-infra" "$CLI_PATH"
+  install -m 0755 "$PROJECT_ROOT/scripts/traffic-header.sh" "$TRAFFIC_CLI_PATH"
 }
 
 install_sing_box() {
@@ -410,7 +429,19 @@ generate_and_render() {
   install -m 0644 "$PROJECT_ROOT/templates/systemd/edge-infra-hy2.service" /etc/systemd/system/edge-infra-hy2.service
   install -m 0644 "$PROJECT_ROOT/templates/systemd/edge-infra-trojan.service" /etc/systemd/system/edge-infra-trojan.service
   render_template "$PROJECT_ROOT/templates/systemd/edge-infra-port-hopping.service" /etc/systemd/system/edge-infra-port-hopping.service
+  install -m 0644 "$PROJECT_ROOT/templates/systemd/edge-infra-traffic.service" "/etc/systemd/system/$TRAFFIC_SERVICE"
+  install -m 0644 "$PROJECT_ROOT/templates/systemd/edge-infra-traffic.timer" "/etc/systemd/system/$TRAFFIC_TIMER"
   chmod 0644 /etc/systemd/system/edge-infra-port-hopping.service
+  install -d -m 0755 "$TRAFFIC_SNIPPET_DIR"
+  {
+    state_value NETWORK_INTERFACE "$NETWORK_INTERFACE"
+    state_value TOTAL_BYTES "$TRAFFIC_TOTAL_BYTES"
+    state_value SNIPPET_PATH "$TRAFFIC_SNIPPET"
+  } > "$ETC_DIR/traffic.env"
+  chmod 0600 "$ETC_DIR/traffic.env"
+  printf 'add_header Subscription-Userinfo "upload=0; download=0; total=%s" always;\n' \
+    "$TRAFFIC_TOTAL_BYTES" > "$TRAFFIC_SNIPPET"
+  chmod 0644 "$TRAFFIC_SNIPPET"
   render_template "$PROJECT_ROOT/templates/letsencrypt/reload-edge-infra" "$CERT_HOOK"
   chmod 0700 "$CERT_HOOK"
 }
@@ -479,6 +510,8 @@ write_manifest() {
     /etc/systemd/system/edge-infra-hy2.service
     /etc/systemd/system/edge-infra-trojan.service
     /etc/systemd/system/edge-infra-port-hopping.service
+    "/etc/systemd/system/$TRAFFIC_SERVICE"
+    "/etc/systemd/system/$TRAFFIC_TIMER"
     "$NGINX_SITE"
     "$CERT_HOOK"
     "$SING_BOX_ROOT/$SING_BOX_VERSION/sing-box"
@@ -487,6 +520,9 @@ write_manifest() {
     "$INSTALLED_PROJECT_ROOT/lib/common.sh"
     "$INSTALLED_PROJECT_ROOT/versions.env"
     "$INSTALLED_PROJECT_ROOT/scripts/hopping-stop.sh"
+    "$INSTALLED_PROJECT_ROOT/scripts/traffic-header.sh"
+    "$ETC_DIR/traffic.env"
+    "$TRAFFIC_CLI_PATH"
   )
   : > "$MANIFEST_FILE"
   local file
@@ -502,8 +538,14 @@ start_services() {
   "$SING_BOX_ROOT/current/sing-box" check -c "$ETC_DIR/sing-box/trojan.json"
   nft -c -f "$ETC_DIR/nftables/hy2-port-hopping.nft"
   systemctl daemon-reload
+  systemctl enable --now vnstat.service
+  if ! vnstat --dbiflist 1 | grep -Fxq "$NETWORK_INTERFACE"; then
+    vnstat --add -i "$NETWORK_INTERFACE"
+  fi
   systemctl enable --now edge-infra-port-hopping.service
   systemctl enable --now edge-infra-hy2.service edge-infra-trojan.service
+  systemctl enable --now "$TRAFFIC_TIMER"
+  systemctl start "$TRAFFIC_SERVICE"
 }
 
 install_cmd() {
@@ -519,14 +561,20 @@ install_cmd() {
   NGINX_WAS_ACTIVE=0
   NGINX_WAS_ENABLED=0
   NGINX_DEFAULT_REMOVED=0
+  VNSTAT_WAS_INSTALLED=0
+  VNSTAT_WAS_ACTIVE=0
+  VNSTAT_WAS_ENABLED=0
   CERT_CREATED=0
   command -v nginx >/dev/null 2>&1 && NGINX_WAS_INSTALLED=1
+  command -v vnstat >/dev/null 2>&1 && VNSTAT_WAS_INSTALLED=1
   if systemctl is-active --quiet nginx.service; then
     NGINX_WAS_ACTIVE=1
   fi
   if systemctl is-enabled --quiet nginx.service; then
     NGINX_WAS_ENABLED=1
   fi
+  systemctl is-active --quiet vnstat.service && VNSTAT_WAS_ACTIVE=1
+  systemctl is-enabled --quiet vnstat.service && VNSTAT_WAS_ENABLED=1
   install -d -m 0700 "$BACKUP_ROOT"
   snapshot_host
   write_state
@@ -598,6 +646,8 @@ rollback_internal() {
 
   systemctl disable --now edge-infra-hy2.service edge-infra-trojan.service >/dev/null 2>&1 || true
   systemctl disable --now edge-infra-port-hopping.service >/dev/null 2>&1 || true
+  systemctl disable --now "$TRAFFIC_TIMER" >/dev/null 2>&1 || true
+  systemctl stop "$TRAFFIC_SERVICE" >/dev/null 2>&1 || true
   if command -v nft >/dev/null 2>&1 && nft list table inet "$NFT_TABLE" >/dev/null 2>&1; then
     nft delete table inet "$NFT_TABLE" || true
   fi
@@ -630,18 +680,29 @@ rollback_internal() {
   for unit in "${UNITS[@]}"; do
     [[ -f /etc/systemd/system/$unit ]] && rm -- "/etc/systemd/system/$unit"
   done
+  for unit in "$TRAFFIC_SERVICE" "$TRAFFIC_TIMER"; do
+    [[ -f /etc/systemd/system/$unit ]] && rm -- "/etc/systemd/system/$unit"
+  done
   systemctl daemon-reload >/dev/null 2>&1 || true
 
   safe_remove_tree "$ETC_DIR" /etc/edge-infra
   safe_remove_tree "$SUB_ROOT" /var/www/edge-infra-subscription
   safe_remove_tree "$ACME_ROOT" /var/www/edge-infra-acme
   safe_remove_tree "$RUNTIME_ROOT" /usr/local/lib/edge-infra
+  safe_remove_tree "$TRAFFIC_SNIPPET_DIR" /etc/nginx/snippets/edge-infra-traffic
   if [[ -L /usr/local/bin/sing-box ]]; then
     [[ $(readlink /usr/local/bin/sing-box) == "$SING_BOX_ROOT/current/sing-box" ]] || \
       die "refusing to remove unexpected /usr/local/bin/sing-box symlink"
     rm -- /usr/local/bin/sing-box
   fi
   [[ -f $CLI_PATH ]] && rm -- "$CLI_PATH"
+  [[ -f $TRAFFIC_CLI_PATH ]] && rm -- "$TRAFFIC_CLI_PATH"
+  if [[ ${VNSTAT_WAS_ACTIVE:-0} == 0 ]]; then
+    systemctl stop vnstat.service >/dev/null 2>&1 || true
+  fi
+  if [[ ${VNSTAT_WAS_ENABLED:-0} == 0 ]]; then
+    systemctl disable vnstat.service >/dev/null 2>&1 || true
+  fi
   if [[ -f $STATE_FILE ]]; then
     cp "$STATE_FILE" "$BACKUP_DIR/removed-state.env" 2>/dev/null || true
   fi
@@ -674,6 +735,9 @@ status_cmd() {
       "$(systemctl is-enabled "$unit" 2>/dev/null || true)" \
       "$(systemctl is-active "$unit" 2>/dev/null || true)"
   done
+  printf '%-24s enabled=%-8s active=%s\n' "$TRAFFIC_TIMER" \
+    "$(systemctl is-enabled "$TRAFFIC_TIMER" 2>/dev/null || true)" \
+    "$(systemctl is-active "$TRAFFIC_TIMER" 2>/dev/null || true)"
 }
 
 verify_internal() {
@@ -690,6 +754,9 @@ verify_internal() {
   [[ $(stat -c '%a' "$ETC_DIR/secrets.env") == 600 ]] || die "secrets.env permission must be 600"
   [[ $(stat -c '%a' "$SUB_ROOT/$SUBSCRIPTION_FILE") == 640 ]] || die "subscription permission must be 640"
   [[ $(stat -c '%U:%G' "$SUB_ROOT/$SUBSCRIPTION_FILE") == root:www-data ]] || die "subscription owner must be root:www-data"
+  [[ -x $TRAFFIC_CLI_PATH ]] || die "traffic header updater is missing"
+  [[ $(stat -c '%a' "$ETC_DIR/traffic.env") == 600 ]] || die "traffic.env permission must be 600"
+  [[ $(stat -c '%a' "$TRAFFIC_SNIPPET") == 644 ]] || die "traffic header snippet permission must be 644"
   "$SING_BOX_ROOT/current/sing-box" check -c "$ETC_DIR/sing-box/hy2.json"
   "$SING_BOX_ROOT/current/sing-box" check -c "$ETC_DIR/sing-box/trojan.json"
   nginx -t
@@ -699,11 +766,20 @@ verify_internal() {
     systemctl is-enabled --quiet "$unit" || die "$unit is not enabled"
     systemctl is-active --quiet "$unit" || die "$unit is not active"
   done
+  systemctl is-enabled --quiet vnstat.service || die "vnstat.service is not enabled"
+  systemctl is-active --quiet vnstat.service || die "vnstat.service is not active"
+  systemctl is-enabled --quiet "$TRAFFIC_TIMER" || die "$TRAFFIC_TIMER is not enabled"
+  systemctl is-active --quiet "$TRAFFIC_TIMER" || die "$TRAFFIC_TIMER is not active"
+  [[ $(systemctl show "$TRAFFIC_SERVICE" -p Result --value) == success ]] \
+    || die "$TRAFFIC_SERVICE last run did not succeed"
+  "$TRAFFIC_CLI_PATH" verify >/dev/null
   tcp_port_in_use 443 || die "TCP 443 is not listening"
   tcp_port_in_use "$TROJAN_PORT" || die "TCP $TROJAN_PORT is not listening"
   udp_port_or_range_in_use 443 443 || die "UDP 443 is not listening"
   curl --fail --silent --show-error --resolve "$SUB_DOMAIN:443:127.0.0.1" \
-    "https://$SUB_DOMAIN/$SUBSCRIPTION_FILE" >/dev/null
+    --dump-header - --output /dev/null "https://$SUB_DOMAIN/$SUBSCRIPTION_FILE" \
+    | grep -Eiq "^subscription-userinfo: upload=[0-9]+; download=[0-9]+; total=$TRAFFIC_TOTAL_BYTES[[:space:]]*$" \
+    || die "subscription response is missing the traffic header"
   log "verify passed"
 }
 

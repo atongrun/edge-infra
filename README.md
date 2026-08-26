@@ -13,6 +13,7 @@ Mihomo 主链路 fallback
   4. DediOne-HY2-Hop   Hysteria2 port hopping    UDP 20000-20031 -> UDP 443
 
 HTTPS subscription    nginx                    TCP 443
+Monthly traffic       vnStat + response header hourly
 ACME challenge        nginx                    TCP 80
 ```
 
@@ -103,7 +104,9 @@ sudo edge-infra health
 
 Import the printed subscription URL into Mihomo/Clash Verge and perform an
 external smoke test. Treat the URL as a credential: do not commit it or expose
-it in logs.
+it in logs. Refreshing the existing subscription card shows the current
+vnStat month usage against a 500 GB total; no second URL or client plugin is
+required.
 
 The repository checks can be run before deployment:
 

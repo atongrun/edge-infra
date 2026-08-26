@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh edge-infra subscription traffic header hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+AccuracySec=1min
+Unit=edge-infra-traffic.service
+
+[Install]
+WantedBy=timers.target

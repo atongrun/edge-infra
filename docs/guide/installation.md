@@ -160,8 +160,8 @@ sudo ./bin/edge-infra install --config /root/edge-infra.env --yes
 
 The base installer generates HY2/Trojan passwords and the random subscription
 bearer path on the VPS. It installs the pinned sing-box release only after
-verifying its SHA256, renders isolated systemd units, obtains the certificate,
-and verifies the base deployment.
+verifying its SHA256, installs vnStat, renders isolated systemd units, obtains
+the certificate, and verifies the base deployment.
 
 Create the Reality config after the base installation, using the actual
 subscription path from the base state:
@@ -208,13 +208,17 @@ Confirm the following explicitly:
 - `edge-infra-hy2.service`, `edge-infra-trojan.service`,
   `edge-infra-port-hopping.service`, `nginx.service`, and
   `sing-box-reality.service` are enabled and active;
+- `vnstat.service` and `edge-infra-traffic.timer` are enabled and active, and
+  the last `edge-infra-traffic.service` run succeeded;
 - TCP 9443, TCP 8443, TCP 443, TCP 80, UDP 443, and the hopping range have the
   expected listeners;
 - the subscription contains exactly one `DediOne-Reality` node;
 - `主链路` has the exact Reality → Trojan → HY2 → HY2-Hop order;
 - no legacy nested `PROXY`, `Proxies`, or `OpenAI` group remains in the
   simplified subscription;
-- the local HTTPS subscription request succeeds;
+- the local HTTPS subscription request succeeds and returns a
+  `Subscription-Userinfo` header whose upload/download values come from the
+  current vnStat month and whose total is 500 GB;
 - the Reality target probe negotiated TLS 1.3 and h2;
 - UFW behavior is understood: an already-active UFW gets scoped rules, while an
   inactive or absent UFW is left unchanged.
@@ -227,12 +231,14 @@ do not commit it, and do not paste it into tickets or public logs.
 A local service check is not enough. On a trusted client:
 
 1. import the printed HTTPS subscription URL into Mihomo/Clash Verge;
-2. confirm `DediOne-Reality` can establish a connection;
-3. test the `主链路` group and confirm the fallback group is usable;
-4. test an ordinary HTTPS destination and the operator's required external
+2. refresh that existing subscription once and confirm its card shows current
+   usage out of 500 GB without a new URL or plugin;
+3. confirm `DediOne-Reality` can establish a connection;
+4. test the `主链路` group and confirm the fallback group is usable;
+5. test an ordinary HTTPS destination and the operator's required external
    services;
-5. if relevant, test both system proxy and TUN mode;
-6. record only high-level pass/fail results, never generated credentials.
+6. if relevant, test both system proxy and TUN mode;
+7. record only high-level pass/fail results, never generated credentials.
 
 To validate failover, deliberately stop only a baseline service during a
 controlled window, observe fallback selection, and restore it. Do not confuse
