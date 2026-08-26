@@ -778,7 +778,7 @@ verify_internal() {
   udp_port_or_range_in_use 443 443 || die "UDP 443 is not listening"
   curl --fail --silent --show-error --resolve "$SUB_DOMAIN:443:127.0.0.1" \
     --dump-header - --output /dev/null "https://$SUB_DOMAIN/$SUBSCRIPTION_FILE" \
-    | grep -Eiq "^subscription-userinfo: upload=[0-9]+; download=[0-9]+; total=$TRAFFIC_TOTAL_BYTES[[:space:]]*$" \
+    | grep -Eiq "^subscription-userinfo: upload=[0-9]+; download=[0-9]+; total=${TRAFFIC_TOTAL_BYTES}[[:space:]]*$" \
     || die "subscription response is missing the traffic header"
   log "verify passed"
 }
