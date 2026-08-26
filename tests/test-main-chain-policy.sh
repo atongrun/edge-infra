@@ -66,7 +66,7 @@ fi
 
 actual_order=$(awk '
   $0 == "- name: 主链路" {in_group=1; next}
-  in_group && /^- name:/ {in_group=0}
+  in_group && /^[A-Za-z0-9_-]+:$/ {in_group=0}
   in_group && /^  - / {sub(/^  - /, ""); print}
 ' "$output")
 expected_order=$'DediOne-Reality\nDediOne-Trojan\nDediOne-HY2\nDediOne-HY2-Hop'
