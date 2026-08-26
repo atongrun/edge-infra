@@ -10,6 +10,7 @@ DediOne-Trojan    TCP 8443         independent TCP/TLS fallback
 DediOne-HY2       UDP 443          primary UDP/QUIC fallback
 DediOne-HY2-Hop   UDP 20000-20031  nft redirect -> UDP 443
 Subscription      TCP 443          nginx static YAML
+Monthly traffic   eth0             vnStat -> Subscription-Userinfo header
 ACME              TCP 80           Certbot webroot + HTTPS redirect
 ```
 
@@ -27,6 +28,8 @@ HY2 and HY2-Hop remain in the same UDP/QUIC failure domain. Port hopping can wor
 - `edge-infra-port-hopping.service` owns only `table inet edge_infra_hy2_hopping`.
 - `sing-box-reality.service` (overlay) owns only `/etc/sing-box/reality.json`; it does not touch HY2, Trojan, port hopping, certificates, or nginx.
 - nginx owns TCP 80/443 and the static subscription.
+- vnStat persists public-interface RX/TX. A root oneshot atomically updates
+  only the edge-infra traffic snippet and gracefully reloads nginx hourly.
 - Certbot uses nginx's webroot and a deploy hook that validates before reload/restart.
 
 The sing-box processes never receive `CAP_NET_ADMIN`. The installer does not enable `nftables.service` and never runs `flush ruleset`.

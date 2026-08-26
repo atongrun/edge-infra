@@ -55,7 +55,10 @@ EOF
 render_main_chain "$input" "$output"
 
 [[ $(grep -c '^- name: 主链路$' "$output") == 1 ]]
-! grep -Eq '^- name: (PROXY|Proxies|OpenAI)$' "$output"
+if grep -Eq '^- name: (PROXY|Proxies|OpenAI)$' "$output"; then
+  echo 'legacy proxy group survived main-chain rendering' >&2
+  exit 1
+fi
 [[ $(grep -c '^  - DediOne-Reality$' "$output") == 1 ]]
 [[ $(grep -c '^  - DediOne-Trojan$' "$output") == 1 ]]
 [[ $(grep -c '^  - DediOne-HY2$' "$output") == 1 ]]
@@ -63,7 +66,7 @@ render_main_chain "$input" "$output"
 
 actual_order=$(awk '
   $0 == "- name: 主链路" {in_group=1; next}
-  in_group && /^- name:/ {in_group=0}
+  in_group && /^[A-Za-z0-9_-]+:$/ {in_group=0}
   in_group && /^  - / {sub(/^  - /, ""); print}
 ' "$output")
 expected_order=$'DediOne-Reality\nDediOne-Trojan\nDediOne-HY2\nDediOne-HY2-Hop'

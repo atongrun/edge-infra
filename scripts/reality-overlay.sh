@@ -149,8 +149,7 @@ port_in_use() {
 }
 
 wait_for_listener() {
-  local attempt
-  for attempt in {1..20}; do
+  for _ in {1..20}; do
     if ss -H -lntp | grep -Eq ":${REALITY_PORT}[[:space:]].*sing-box"; then
       return 0
     fi
@@ -351,7 +350,9 @@ install_overlay() {
   BASELINE_SUBSCRIPTION_SHA256=$(sha256_file "$SUBSCRIPTION_FILE")
   UFW_RULE_ADDED=0
   install -m 0600 "$SUBSCRIPTION_FILE" "$BACKUP_DIR/subscription.yaml"
-  command -v ufw >/dev/null 2>&1 && ufw status numbered > "$BACKUP_DIR/ufw-before.txt" 2>&1 || true
+  if command -v ufw >/dev/null 2>&1; then
+    ufw status numbered > "$BACKUP_DIR/ufw-before.txt" 2>&1 || true
+  fi
   ss -lntup > "$BACKUP_DIR/listeners-before.txt"
   systemctl show "$BASELINE_HY2_UNIT" "$BASELINE_TROJAN_UNIT" nginx.service \
     -p Id -p ActiveState -p NRestarts > "$BACKUP_DIR/services-before.txt"

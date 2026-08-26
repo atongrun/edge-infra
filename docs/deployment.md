@@ -32,14 +32,21 @@ Any uncertainty stops deployment without mutation.
 After `--yes`, installation performs these ordered phases:
 
 1. Capture listeners, packages, systemd, UFW and nftables evidence under a root-only timestamped backup.
-2. Install required packages from Ubuntu APT repositories.
+2. Install required packages, including vnStat, from Ubuntu APT repositories.
 3. Download the pinned official sing-box release over HTTPS and verify its pinned SHA256, then symlink `/usr/local/bin/sing-box` to the pinned binary so the optional Reality overlay can locate it.
 4. Generate HY2/Trojan passwords and a 192-bit subscription path token.
 5. Render root-only sing-box configs, Mihomo subscription, nftables and systemd units.
 6. When UFW is active, open only comment-scoped TCP 80 before ACME; bootstrap nginx, obtain a SAN certificate with Certbot webroot HTTP-01, then render the final HTTPS site.
 7. Add comment-scoped UFW rules only when UFW was already active and SSH allow was proven.
-8. Validate sing-box, nginx and nftables before enabling isolated services.
-9. Write managed-file hashes and run `verify`.
+8. Create the dedicated traffic header snippet, validate nginx, then enable the
+   hourly vnStat updater without restarting any sing-box service.
+9. Validate sing-box, nginx and nftables before enabling isolated services.
+10. Write managed-file hashes and run `verify`.
+
+The traffic header maps public-interface RX to `upload`, TX to `download`, and
+uses `536870912000` bytes so Clash Verge displays a 500 GB total. vnStat uses
+the VPS calendar month and cannot reconstruct traffic from before its first
+installation; the provider portal remains the billing authority.
 
 An error after transaction state is created triggers best-effort rollback of edge-infra-owned objects. APT packages and the audit backup are preserved.
 

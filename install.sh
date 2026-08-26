@@ -7,7 +7,7 @@
 #
 # Run from a reviewed checkout:
 #   git clone https://github.com/atongrun/edge-infra.git
-#   cd edge-infra && git checkout v0.1.0
+#   cd edge-infra && git checkout v0.1.1
 #   sudo ./install.sh
 set -Eeuo pipefail
 

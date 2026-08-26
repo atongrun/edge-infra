@@ -13,6 +13,7 @@ Mihomo 主链路 fallback
   4. DediOne-HY2-Hop   Hysteria2 port hopping    UDP 20000-20031 -> UDP 443
 
 HTTPS subscription    nginx                    TCP 443
+Monthly traffic       vnStat + response header hourly
 ACME challenge        nginx                    TCP 80
 ```
 
@@ -50,7 +51,7 @@ agent running on the new VPS:
 ```text
 Install and configure edge-infra on this fresh VPS. Read and follow the full
 installation guide step by step:
-https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.0/docs/guide/installation.md
+https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.1/docs/guide/installation.md
 
 Deploy the complete topology: DediOne-Reality first on TCP 9443,
 DediOne-Trojan on TCP 8443, DediOne-HY2 on UDP 443, and DediOne-HY2-Hop on
@@ -68,7 +69,7 @@ If you prefer to run the installer yourself:
 ```bash
 git clone https://github.com/atongrun/edge-infra.git
 cd edge-infra
-git checkout v0.1.0
+git checkout v0.1.1
 sudo ./install.sh
 ```
 
@@ -83,7 +84,7 @@ Fetch the exact installation guide for the reviewed revision, then follow it
 step by step:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.0/docs/guide/installation.md
+curl -fsSL https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.1/docs/guide/installation.md
 ```
 
 After cloning, the same guide is available at
@@ -103,7 +104,9 @@ sudo edge-infra health
 
 Import the printed subscription URL into Mihomo/Clash Verge and perform an
 external smoke test. Treat the URL as a credential: do not commit it or expose
-it in logs.
+it in logs. Refreshing the existing subscription card shows the current
+vnStat month usage against a 500 GB total; no second URL or client plugin is
+required.
 
 The repository checks can be run before deployment:
 
