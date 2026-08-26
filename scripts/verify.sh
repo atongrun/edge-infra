@@ -17,7 +17,10 @@ grep -q 'enhanced-mode: fake-ip' templates/mihomo/edge.yaml
 grep -q '  - DediOne-Trojan' templates/mihomo/edge.yaml
 grep -q '  - DediOne-HY2' templates/mihomo/edge.yaml
 grep -q '  - DediOne-HY2-Hop' templates/mihomo/edge.yaml
-! grep -Eq 'name: (Edge-|PROXY|Proxies|OpenAI)' templates/mihomo/edge.yaml
+if grep -Eq 'name: (Edge-|PROXY|Proxies|OpenAI)' templates/mihomo/edge.yaml; then
+  echo 'legacy proxy group found' >&2
+  exit 1
+fi
 grep -q 'install.sh' install.sh
 grep -q 'table inet edge_infra_hy2_hopping' templates/nftables/hy2-port-hopping.nft
 grep -Eq '^SING_BOX_VERSION=[0-9]+\.[0-9]+\.[0-9]+$' versions.env

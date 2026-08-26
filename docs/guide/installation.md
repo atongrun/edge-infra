@@ -77,7 +77,7 @@ On the new VPS:
 ```bash
 git clone https://github.com/atongrun/edge-infra.git
 cd edge-infra
-git checkout v0.1.0
+git checkout v0.1.1
 ```
 
 If the operator explicitly selected a branch or commit, record it in the

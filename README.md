@@ -51,7 +51,7 @@ agent running on the new VPS:
 ```text
 Install and configure edge-infra on this fresh VPS. Read and follow the full
 installation guide step by step:
-https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.0/docs/guide/installation.md
+https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.1/docs/guide/installation.md
 
 Deploy the complete topology: DediOne-Reality first on TCP 9443,
 DediOne-Trojan on TCP 8443, DediOne-HY2 on UDP 443, and DediOne-HY2-Hop on
@@ -69,7 +69,7 @@ If you prefer to run the installer yourself:
 ```bash
 git clone https://github.com/atongrun/edge-infra.git
 cd edge-infra
-git checkout v0.1.0
+git checkout v0.1.1
 sudo ./install.sh
 ```
 
@@ -84,7 +84,7 @@ Fetch the exact installation guide for the reviewed revision, then follow it
 step by step:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.0/docs/guide/installation.md
+curl -fsSL https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.1/docs/guide/installation.md
 ```
 
 After cloning, the same guide is available at

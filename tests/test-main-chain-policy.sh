@@ -55,7 +55,10 @@ EOF
 render_main_chain "$input" "$output"
 
 [[ $(grep -c '^- name: 主链路$' "$output") == 1 ]]
-! grep -Eq '^- name: (PROXY|Proxies|OpenAI)$' "$output"
+if grep -Eq '^- name: (PROXY|Proxies|OpenAI)$' "$output"; then
+  echo 'legacy proxy group survived main-chain rendering' >&2
+  exit 1
+fi
 [[ $(grep -c '^  - DediOne-Reality$' "$output") == 1 ]]
 [[ $(grep -c '^  - DediOne-Trojan$' "$output") == 1 ]]
 [[ $(grep -c '^  - DediOne-HY2$' "$output") == 1 ]]

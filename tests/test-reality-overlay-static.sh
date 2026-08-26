@@ -14,6 +14,7 @@ grep -q 'client-fingerprint: chrome' scripts/reality-overlay.sh
 grep -q 'DediOne-Reality' scripts/reality-overlay.sh
 grep -q 'name: 主链路' scripts/reality-overlay.sh
 grep -q 'simplify_groups' scripts/reality-overlay.sh
+# shellcheck disable=SC2016 -- this test intentionally matches the literal template variable
 grep -q '^- name: \$NODE_NAME$' scripts/reality-overlay.sh
 grep -q 'SING_BOX_BIN=/usr/local/bin/sing-box' scripts/reality-overlay.sh
 grep -q 'wait_for_listener' scripts/reality-overlay.sh
