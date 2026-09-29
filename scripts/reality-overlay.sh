@@ -319,7 +319,12 @@ rollback_partial() {
 
 cleanup_work() {
   local file
-  for file in "${WORK_FILES[@]:-}"; do [[ -n $file ]] && rm -f -- "$file"; done
+  for file in "${WORK_FILES[@]:-}"; do
+    # An empty work list is successful cleanup, not an errexit failure.
+    if [[ -n $file ]]; then
+      rm -f -- "$file"
+    fi
+  done
 }
 
 finish() {
