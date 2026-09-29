@@ -3,9 +3,22 @@ mixed-port: 7890
 allow-lan: false
 mode: rule
 log-level: info
-ipv6: false
+# Enable IPv6 routing even while DNS below prefers IPv4 answers.
+# DNS ipv6: false alone does not stop native IPv6 traffic bypassing a TUN.
+ipv6: true
 unified-delay: true
 tcp-concurrent: true
+tun:
+  enable: true
+  stack: mixed
+  auto-route: true
+  auto-detect-interface: true
+  strict-route: true
+  dns-hijack:
+  - any:53
+  - tcp://any:53
+  inet6-address:
+  - fdfe:dcba:9876::1/126
 proxies:
 - name: DediOne-HY2
   type: hysteria2
@@ -93,8 +106,13 @@ dns:
   - 223.5.5.5
   - 119.29.29.29
   nameserver:
-  - https://dns.alidns.com/dns-query
-  - https://doh.pub/dns-query
+  - https://1.1.1.1/dns-query#主链路
+  - https://8.8.8.8/dns-query#主链路
+  # Bootstrap must not depend on the proxy it is resolving.
   proxy-server-nameserver:
-  - https://dns.alidns.com/dns-query
-  - https://doh.pub/dns-query
+  - https://dns.alidns.com/dns-query#DIRECT
+  - https://doh.pub/dns-query#DIRECT
+  # Only destinations intentionally routed DIRECT use these resolvers.
+  direct-nameserver:
+  - https://dns.alidns.com/dns-query#DIRECT
+  - https://doh.pub/dns-query#DIRECT
