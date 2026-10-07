@@ -257,7 +257,7 @@ render_main_chain() {
       print "  - DediOne-HY2"
       print "  - DediOne-HY2-Hop"
       print "  url: https://www.gstatic.com/generate_204"
-      print "  interval: 30"
+      print "  interval: 60"
       print "  timeout: 5000"
       print "  max-failed-times: 2"
       print "  lazy: false"

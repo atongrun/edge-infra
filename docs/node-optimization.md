@@ -1,5 +1,28 @@
 # Personal node optimization and acceptance
 
+## Rollback after user-reported instability, 2026-10-07
+
+The user reported substantially worse X browsing and node-test reliability
+after this change than during the preceding week. Short passing tests did not
+establish a long-term stability improvement. Treat the change as a suspected
+regression rather than dismissing the report as an unrelated line problem.
+
+Restore the network policy from commit `48794b6`: 60-second health probes and
+the previous country-based DIRECT rules, without a catch-all public-UDP proxy
+rule. Retain the earlier DNS/IPv6 fixes, the verify exit-status fix and the
+separately verified SSH key-only hardening. Domestic STUN may again expose the
+native public address under this policy; stability is the immediate priority.
+
+The BBR/FQ trial had already been reverted to CUBIC/pfifo_fast. Restore the
+published subscription, its owner state and the installed renderer from the
+pre-change backup; refresh and reactivate the Mac profile. Preserve rollback
+evidence and compare normal use over time before making further changes.
+
+The measurements below are historical experiment results, not a claim that
+the rolled-back policy is currently active or that sustained stability was
+proven. Intermittent HY2 failures were also reproduced in an isolated client,
+so the precise causal contribution of the changes remains unresolved.
+
 ## Measured approach
 
 Use an isolated loopback-only client with the same node definitions when
@@ -30,7 +53,7 @@ guarantees or evidence that UDP is always faster. Keep Reality/Trojan first
 for independent TCP fallback; HY2 remains available when suitable. Preserve
 the established HY2 PMTU compatibility option.
 
-## Retained changes
+## Original experiment changes (network policy subsequently rolled back)
 
 - Route default public UDP through the proxy before country-based DIRECT
   rules; retain private/local destinations and explicit local exceptions.
@@ -72,7 +95,7 @@ exact time, selected node, target hostname from the client log, and whether
 Safari works at the same time. Review HTTPS inspection or managed-device
 profiles with their owner rather than deleting them blindly.
 
-## Acceptance recorded on 2026-10-07
+## Initial short acceptance recorded on 2026-10-07
 
 - Refreshing the original subscription through Clash Verge produced the exact
   published candidate. Effective public-UDP routing precedes the CN bypass.

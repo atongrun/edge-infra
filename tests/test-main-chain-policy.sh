@@ -44,9 +44,6 @@ proxy-groups:
 rules:
 - DOMAIN-SUFFIX,openai.com,PROXY
 - DOMAIN-SUFFIX,chatgpt.com,OpenAI
-- IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
-- NETWORK,udp,PROXY
-- GEOIP,CN,DIRECT
 - MATCH,Proxies
 profile:
   store-selected: true
@@ -78,12 +75,6 @@ expected_order=$'DediOne-Reality\nDediOne-Trojan\nDediOne-HY2\nDediOne-HY2-Hop'
 grep -q '^- DOMAIN-SUFFIX,openai.com,主链路$' "$output"
 grep -q '^- DOMAIN-SUFFIX,chatgpt.com,主链路$' "$output"
 grep -q '^- MATCH,主链路$' "$output"
-grep -q '^  interval: 30$' "$output"
-# Re-rendering the groups must preserve UDP privacy before country bypasses.
-udp_line=$(grep -n '^- NETWORK,udp,主链路$' "$output" | cut -d: -f1)
-cn_line=$(grep -n '^- GEOIP,CN,DIRECT$' "$output" | cut -d: -f1)
-((udp_line < cn_line))
-grep -q '^- IP-CIDR,192.168.0.0/16,DIRECT,no-resolve$' "$output"
 grep -q '^  - 223.5.5.5$' "$output"
 
 echo 'test-main-chain-policy: passed'

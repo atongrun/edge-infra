@@ -17,8 +17,7 @@ ACME              TCP 80           Certbot webroot + HTTPS redirect
 The published subscription exposes one `主链路` fallback group ordered as
 `DediOne-Reality`, `DediOne-Trojan`, `DediOne-HY2`, then `DediOne-HY2-Hop`.
 Health selection affects new connections; established connections do not
-migrate seamlessly. The health-check interval is 30 seconds; this is not a
-guaranteed 30-second recovery time or protection against a whole-VPS outage.
+migrate seamlessly.
 
 HY2 and HY2-Hop remain in the same UDP/QUIC failure domain. Port hopping can work around fixed-port or flow treatment, but the actual heterogeneous fallbacks are the two TCP listeners ahead of them: Reality and Trojan/TLS.
 
