@@ -145,6 +145,7 @@ changed after installation. Use `--force` only after reviewing such changes.
 ## Documentation
 
 - [Client DNS and IPv6 routing](docs/client-egress.md)
+- [Node optimization and acceptance](docs/node-optimization.md)
 - [Full installation guide](docs/guide/installation.md)
 - [Architecture and ownership](docs/architecture.md)
 - [Deployment contract](docs/deployment.md)

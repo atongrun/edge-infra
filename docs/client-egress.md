@@ -15,7 +15,14 @@ not import DNS or TUN settings.
   **not** disable the operating system's IPv6 network.
 - TUN captures both UDP and TCP DNS on port 53. Browser encrypted DNS and
   Android Private DNS are separate settings and may bypass this DNS policy.
+- Public UDP is routed through `主链路` before `GEOIP,CN,DIRECT`, including
+  STUN on nonstandard ports. Private, link-local, loopback and multicast
+  destinations remain local. This privacy-first policy can add latency to
+  domestic UDP games, calls and QUIC traffic; local process/routing exclusions
+  still intentionally bypass it. It is not a promise of complete anonymity.
 - The existing Reality/Trojan/HY2 fallback and HY2 PMTU workaround remain.
+  Health probes run every 30 seconds; existing connections do not migrate
+  seamlessly when a node fails, and all protocols still share one VPS.
 
 ## Client settings that a subscription cannot guarantee
 
@@ -45,7 +52,9 @@ download or parser check alone is not proof of leak prevention on that device.
 1. Validate both the downloaded YAML and any merged configuration using the
    actual client core (`mihomo -t -d CLIENT_DATA_DIR -f CANDIDATE`).
 2. Verify ordinary HTTP, traffic without an explicit HTTP proxy, and IPv4
-   STUN use the intended VPS egress.
+   STUN use the intended VPS egress. Include domestic STUN servers as well as
+   Google/Cloudflare; foreign-only tests miss country-based bypasses. Inspect
+   the actual matched rule and proxy chain, not just the returned address.
 3. Test a literal IPv6 destination, including IPv6 STUN. It must use the VPS
    IPv6 for a proxy-routed destination, or be blocked; it must not return the
    device's native public IPv6. An empty AAAA answer is not sufficient.
@@ -76,4 +85,5 @@ root and repository because the subscription contains credentials.
 
 References: [Mihomo DNS](https://wiki.metacubex.one/config/dns/),
 [Mihomo TUN](https://wiki.metacubex.one/config/inbound/tun/),
+[Mihomo routing rules](https://wiki.metacubex.one/config/rules/),
 [Clash Verge overrides](https://www.clashverge.dev/guide/extend.html).

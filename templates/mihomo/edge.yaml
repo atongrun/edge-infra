@@ -60,7 +60,7 @@ proxy-groups:
   - DediOne-HY2
   - DediOne-HY2-Hop
   url: https://www.gstatic.com/generate_204
-  interval: 60
+  interval: 30
   timeout: 5000
   max-failed-times: 2
   lazy: false
@@ -93,6 +93,20 @@ rules:
 - DOMAIN-SUFFIX,telegram.me,主链路
 - DOMAIN-SUFFIX,telegram-cdn.org,主链路
 - DOMAIN-SUFFIX,tdesktop.com,主链路
+# Keep local discovery/private destinations local. Public UDP (including
+# STUN on arbitrary ports) must precede country-based direct rules.
+- IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+- IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+- IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+- IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+- IP-CIDR,169.254.0.0/16,DIRECT,no-resolve
+- IP-CIDR,224.0.0.0/4,DIRECT,no-resolve
+- IP-CIDR,255.255.255.255/32,DIRECT,no-resolve
+- IP-CIDR6,::1/128,DIRECT,no-resolve
+- IP-CIDR6,fc00::/7,DIRECT,no-resolve
+- IP-CIDR6,fe80::/10,DIRECT,no-resolve
+- IP-CIDR6,ff00::/8,DIRECT,no-resolve
+- NETWORK,udp,主链路
 - GEOIP,CN,DIRECT
 - MATCH,主链路
 profile:
