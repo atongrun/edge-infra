@@ -13,30 +13,42 @@ source "$CONFIG_FILE"
 : "${TOTAL_BYTES:?TOTAL_BYTES is required}"
 : "${SNIPPET_PATH:?SNIPPET_PATH is required}"
 [[ $NETWORK_INTERFACE =~ ^[A-Za-z0-9_.:-]+$ ]] || { echo 'invalid NETWORK_INTERFACE' >&2; exit 1; }
-[[ $TOTAL_BYTES =~ ^[1-9][0-9]*$ ]] || { echo 'invalid TOTAL_BYTES' >&2; exit 1; }
+[[ $TOTAL_BYTES =~ ^[1-9][0-9]{0,17}$ ]] || { echo 'invalid TOTAL_BYTES' >&2; exit 1; }
 [[ $SNIPPET_PATH == /etc/nginx/snippets/edge-infra-traffic/subscription-userinfo.conf ]] \
   || { echo 'unsafe SNIPPET_PATH' >&2; exit 1; }
+
+BILLING_MODE=${BILLING_MODE:-both}
+[[ $BILLING_MODE == both || $BILLING_MODE == rx || $BILLING_MODE == tx ]] \
+  || { echo 'invalid BILLING_MODE (expected both, rx or tx)' >&2; exit 1; }
 
 usage_bytes() {
   local year month json row
   year=$(date +%Y)
   month=$((10#$(date +%m)))
-  json=$(vnstat --json m 1 -i "$NETWORK_INTERFACE")
+  json=$(vnstat --json m 1 -i "$NETWORK_INTERFACE") || return 1
   row=$(jq -er --argjson year "$year" --argjson month "$month" '
     .interfaces | if length == 1 then .[0] else error("expected one interface") end
+    | . as $interface
     | .traffic.month
     | map(select(.date.year == $year and .date.month == $month))
     | if length == 0 then [0, 0] else (last | [.rx, .tx]) end
-    | if all(.[]; type == "number" and . >= 0) then @tsv else error("invalid counters") end
-  ' <<<"$json")
+    | if all(.[]; type == "number" and . >= 0) then . else error("invalid counters") end
+    | . + [$interface.updated.timestamp]
+    | if (.[2] | type == "number" and . > 0 and . == floor) then @tsv else error("missing sample timestamp") end
+  ' <<<"$json") || return 1
   printf '%s\n' "$row"
 }
 
 render_candidate() {
-  local rx tx
-  IFS=$'\t' read -r rx tx < <(usage_bytes)
+  local rx tx sampled_at
+  local row
+  row=$(usage_bytes) || return 1
+  IFS=$'\t' read -r rx tx sampled_at <<<"$row"
+  [[ $BILLING_MODE != rx ]] || tx=0
+  [[ $BILLING_MODE != tx ]] || rx=0
   printf 'add_header Subscription-Userinfo "upload=%s; download=%s; total=%s" always;\n' \
     "$rx" "$tx" "$TOTAL_BYTES"
+  printf 'add_header X-Traffic-Sampled-At "%s" always;\n' "$sampled_at"
 }
 
 nginx_test() {
@@ -90,9 +102,10 @@ update_header() {
 }
 
 verify_header() {
-  local current_rx current_tx actual values upload download total
+  local current_rx current_tx current_sample actual values upload download total sampled_at row
   [[ -f $SNIPPET_PATH ]] || { echo 'traffic header snippet is missing' >&2; exit 1; }
-  IFS=$'\t' read -r current_rx current_tx < <(usage_bytes)
+  row=$(usage_bytes) || return 1
+  IFS=$'\t' read -r current_rx current_tx current_sample <<<"$row"
   actual=$(<"$SNIPPET_PATH")
   values=$(sed -nE \
     's/^add_header Subscription-Userinfo "upload=([0-9]+); download=([0-9]+); total=([0-9]+)" always;$/\1 \2 \3/p' \
@@ -100,8 +113,15 @@ verify_header() {
   [[ -n $values ]] || { echo 'traffic header syntax is invalid' >&2; exit 1; }
   read -r upload download total <<<"$values"
   [[ $total == "$TOTAL_BYTES" ]] || { echo 'traffic header total is invalid' >&2; exit 1; }
+  [[ $BILLING_MODE != rx || $download == 0 ]] || { echo 'unbilled tx must be zero' >&2; exit 1; }
+  [[ $BILLING_MODE != tx || $upload == 0 ]] || { echo 'unbilled rx must be zero' >&2; exit 1; }
   (( upload <= current_rx && download <= current_tx )) \
     || { echo 'traffic header counters exceed current vnStat month' >&2; exit 1; }
+  sampled_at=$(sed -nE 's/^add_header X-Traffic-Sampled-At "([0-9]+)" always;$/\1/p' <<<"$actual")
+  if ! [[ $sampled_at =~ ^[1-9][0-9]{0,9}$ ]] || (( sampled_at > current_sample )); then
+    echo 'traffic sample timestamp is invalid' >&2
+    exit 1
+  fi
   nginx_test
   systemctl is-active --quiet nginx.service
   printf '%s\n' "$actual"
