@@ -118,8 +118,10 @@ verify_header() {
   (( upload <= current_rx && download <= current_tx )) \
     || { echo 'traffic header counters exceed current vnStat month' >&2; exit 1; }
   sampled_at=$(sed -nE 's/^add_header X-Traffic-Sampled-At "([0-9]+)" always;$/\1/p' <<<"$actual")
-  [[ $sampled_at =~ ^[1-9][0-9]{0,9}$ ]] && (( sampled_at <= current_sample )) \
-    || { echo 'traffic sample timestamp is invalid' >&2; exit 1; }
+  if ! [[ $sampled_at =~ ^[1-9][0-9]{0,9}$ ]] || (( sampled_at > current_sample )); then
+    echo 'traffic sample timestamp is invalid' >&2
+    exit 1
+  fi
   nginx_test
   systemctl is-active --quiet nginx.service
   printf '%s\n' "$actual"
