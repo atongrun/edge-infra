@@ -7,17 +7,7 @@ that need a separate SOCKS5 entry point.
 
 ## Architecture
 
-```text
-Mihomo 主链路 fallback
-  1. DediOne-Reality   VLESS + Reality + Vision   TCP 9443
-  2. DediOne-Trojan    Trojan/TLS                TCP 8443
-  3. DediOne-HY2       Hysteria2                 UDP 443
-  4. DediOne-HY2-Hop   Hysteria2 port hopping    UDP 20000-20031 -> UDP 443
-
-HTTPS subscription    nginx                    TCP 443
-Monthly traffic       vnStat + response header hourly
-ACME challenge        nginx                    TCP 80
-```
+![Primary architecture: Mihomo selects Reality, Trojan, HY2 or HY2-Hop in priority order, with one shared VPS egress.](docs/assets/primary-architecture.svg)
 
 Reality and Trojan provide heterogeneous TCP fallbacks. HY2 and HY2-Hop remain
 UDP/QUIC paths. The published subscription contains one main group, ordered
@@ -28,11 +18,7 @@ exactly as shown above.
 Nowhere adds an independent VPS-side **Portal** and a client-side **Vector**.
 Vector exposes a local SOCKS5 proxy and connects to Portal over TCP or QUIC:
 
-```text
-Selected application
-  -> Vector SOCKS5 on 127.0.0.1:1089
-  -> Nowhere TCP or QUIC -> Portal on TCP/UDP 10443 -> Internet
-```
+![Optional Nowhere architecture: a selected application connects through local Vector and independent Portal; the existing Mihomo fallback remains separate.](docs/assets/nowhere-architecture.svg)
 
 This component is **opt-in**: `install.sh` does not install it, and it is not
 added to the Mihomo subscription or fallback chain. Portal has its own service,

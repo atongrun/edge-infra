@@ -5,6 +5,8 @@ the base installer or Mihomo subscription. It owns TCP and UDP port `10443` by
 default and leaves nginx `443`, Reality `9443`, Trojan `8443`, HY2 `443`, and
 the hopping range untouched.
 
+![Nowhere's application, Vector and Portal path, separate from the existing Mihomo fallback.](assets/nowhere-architecture.svg)
+
 ## Preconditions
 
 - A Linux x86_64 or aarch64 VPS with an unused configurable TCP and UDP port.
