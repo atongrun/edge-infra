@@ -13,7 +13,7 @@ cat >"$mock" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 if [[ ${1:-} == --version ]]; then
-  printf '%s\n' 'Nowhere v3.0.1'
+  printf '%s\n' 'nowhere-v3.0.1 macos/aarch64'
   exit 0
 fi
 case ${1:-} in
@@ -83,7 +83,7 @@ alpha_mock="$tmpdir/nowhere-alpha"
 cat >"$alpha_mock" <<'EOF'
 #!/usr/bin/env bash
 if [[ ${1:-} == --version ]]; then
-  printf '%s\n' 'Nowhere v3.0.1-alpha'
+  printf '%s\n' 'nowhere-v3.0.1-alpha macos/aarch64'
   exit 0
 fi
 exit 1

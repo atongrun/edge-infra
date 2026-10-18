@@ -120,7 +120,7 @@ try:
     ).stdout
 except (OSError, subprocess.SubprocessError):
     fail("cannot verify Nowhere version")
-if not re.search(r"(?<![0-9A-Za-z.-])v?3\.0\.1(?![0-9A-Za-z.-])", version):
+if not re.fullmatch(r"nowhere-v3\.0\.1 [a-z0-9_-]+/[A-Za-z0-9_-]+", version.strip()):
     fail("NOWHERE_BINARY is not Nowhere v3.0.1")
 
 transport = "tcp" if carrier == "tcp" else "udp"

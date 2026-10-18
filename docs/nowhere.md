@@ -64,6 +64,15 @@ services on the same VPS. Test from a separate network if those scoped rules
 cannot be verified; otherwise Vector can recurse through the primary Reality
 path.
 
+A full Mihomo configuration reload can interrupt existing connections even
+without restarting its process. On a router whose TUN capture is implemented
+only by policy routing, an alternative is a separate policy rule for the exact
+Portal IPv4, TCP/UDP protocol and destination port, before the TUN lookup. Verify
+the router supports port selectors and has no earlier transparent redirect;
+keep every other port on its original route. Give this exception its own
+rollback and boot/interface-up handling. Do not add a whole-IP bypass or copy
+another host's rule priorities without checking the current rules.
+
 The optional `scripts/nowhere-vector.sh` launcher runs one foreground Vector
 without changing the system proxy. Its current-user-owned `0600` configuration
 is parsed as data and must stay outside Git:
