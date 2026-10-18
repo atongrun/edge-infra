@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820" role="img" aria-labelledby="title desc">
+<title id="title">edge-infra primary proxy architecture</title>
+<desc id="desc">A client application uses a Mihomo fallback group. Four alternative routes connect to one VPS, in priority order: Reality and Trojan over TCP, then Hysteria2 and Hysteria2 port hopping over UDP. They share one Internet exit. HTTPS subscription, hourly traffic headers, and HTTP-01 certificate handling are shown separately from the proxy data paths.</desc>
+<defs>
+  <marker id="blue-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2563EB"/></marker>
+  <marker id="teal-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#0F766E"/></marker>
+  <marker id="slate-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#64748B"/></marker>
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #0F172A; }
+    .title { font-size: 36px; font-weight: 700; }
+    .subtitle { font-size: 18px; fill: #475569; }
+    .section { font-size: 16px; font-weight: 700; letter-spacing: 1.5px; fill: #475569; }
+    .heading { font-size: 22px; font-weight: 700; }
+    .body { font-size: 18px; }
+    .small { font-size: 16px; fill: #475569; }
+    .card { fill: #FFFFFF; stroke: #D8E1EB; stroke-width: 1.5; }
+  </style>
+</defs>
+<rect width="1280" height="820" fill="#F5F7FB"/>
+
+<text x="48" y="59" class="title">Primary proxy architecture</text>
+<text x="48" y="94" class="subtitle">Default fresh-VPS topology · One subscription · TCP-first fallback</text>
+<rect x="40" y="130" width="360" height="510" rx="22" fill="#EDF3FD" stroke="#D7E4F8" stroke-width="1.5"/>
+<rect x="448" y="130" width="480" height="510" rx="22" fill="#EEF2F7" stroke="#D8E1EB" stroke-width="1.5"/>
+<text x="64" y="166" class="section">CLIENT / ROUTER</text>
+<text x="474" y="166" class="section">ONE VPS · FOUR ALTERNATIVE ROUTES</text>
+<rect x="66" y="202" width="308" height="102" rx="16" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="1.5"/>
+<rect x="87" y="228" width="44" height="31" rx="5" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/><path d="M 99 269 H 119 M 109 259 V 269" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/>
+<text x="148" y="244" class="heading">Applications</text>
+<text x="148" y="274" class="small">Use the client proxy</text>
+<path d="M 220 304 V 365" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#blue-arrow)"/>
+<rect x="66" y="367" width="308" height="155" rx="16" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="1.5"/>
+<text x="89" y="402" class="heading">Mihomo / Clash</text>
+<text x="89" y="433" class="body">Main fallback group</text>
+<text x="89" y="465" class="small">Selects one available route</text>
+<text x="89" y="492" class="small">Priority 1 → 2 → 3 → 4</text>
+<text x="66" y="561" class="small">A single subscription supplies</text>
+<text x="66" y="585" class="small">all four nodes in this order.</text>
+<path d="M 374 444 H 425 M 425 250 V 568" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 425 250 H 474" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#blue-arrow)"/>
+<rect x="476" y="206" width="380" height="88" rx="16" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="1.5"/>
+<circle cx="503" cy="233" r="15" fill="#2563EB"/><text x="503" y="239" text-anchor="middle" style="font-size:17px;font-weight:700;fill:#FFFFFF">1</text>
+<text x="529" y="237" class="heading">DediOne-Reality</text>
+<text x="495" y="264" class="small">VLESS · Reality · Vision</text>
+<text x="495" y="284" class="small">TCP 9443</text>
+<path d="M 856 250 H 920" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 425 356 H 474" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#blue-arrow)"/>
+<rect x="476" y="312" width="380" height="88" rx="16" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="1.5"/>
+<circle cx="503" cy="339" r="15" fill="#2563EB"/><text x="503" y="345" text-anchor="middle" style="font-size:17px;font-weight:700;fill:#FFFFFF">2</text>
+<text x="529" y="343" class="heading">DediOne-Trojan</text>
+<text x="495" y="370" class="small">Trojan over TLS</text>
+<text x="495" y="390" class="small">TCP 8443</text>
+<path d="M 856 356 H 920" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 425 462 H 474" fill="none" stroke="#0F766E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#teal-arrow)" stroke-dasharray="7 6"/>
+<rect x="476" y="418" width="380" height="88" rx="16" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="1.5"/>
+<circle cx="503" cy="445" r="15" fill="#0F766E"/><text x="503" y="451" text-anchor="middle" style="font-size:17px;font-weight:700;fill:#FFFFFF">3</text>
+<text x="529" y="449" class="heading">DediOne-HY2</text>
+<text x="495" y="476" class="small">Hysteria2</text>
+<text x="495" y="496" class="small">UDP 443</text>
+<path d="M 856 462 H 920" fill="none" stroke="#0F766E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6"/>
+<path d="M 425 568 H 474" fill="none" stroke="#0F766E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#teal-arrow)" stroke-dasharray="7 6"/>
+<rect x="476" y="524" width="380" height="88" rx="16" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="1.5"/>
+<circle cx="503" cy="551" r="15" fill="#0F766E"/><text x="503" y="557" text-anchor="middle" style="font-size:17px;font-weight:700;fill:#FFFFFF">4</text>
+<text x="529" y="555" class="heading">DediOne-HY2-Hop</text>
+<text x="495" y="582" class="small">Hysteria2 port hopping</text>
+<text x="495" y="602" class="small">UDP 20000–20031 → 443</text>
+<path d="M 856 568 H 920" fill="none" stroke="#0F766E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6"/>
+<path d="M 920 250 V 568 M 920 409 H 966" fill="none" stroke="#64748B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#slate-arrow)"/>
+<rect x="970" y="315" width="242" height="186" rx="16" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="1.5"/>
+<g fill="none" stroke="#475569" stroke-width="2"><circle cx="1091" cy="355" r="22"/><ellipse cx="1091" cy="355" rx="9" ry="22"/><path d="M 1069 355 H 1113 M 1073 345 H 1109 M 1073 365 H 1109"/></g>
+<text x="1091" y="405" class="heading" text-anchor="middle">Internet</text>
+<text x="1091" y="437" class="small" text-anchor="middle">Shared VPS egress</text>
+<text x="1091" y="466" class="small" text-anchor="middle">One active route</text>
+<path d="M 993 551 H 1027" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1040" y="557" class="small">TCP</text>
+<path d="M 993 579 H 1027" fill="none" stroke="#0F766E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6"/>
+<text x="1040" y="585" class="small">UDP / QUIC</text>
+<text x="48" y="684" class="section">SUBSCRIPTION &amp; MAINTENANCE</text>
+<rect x="40" y="704" width="384" height="88" rx="16" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="1.5"/>
+<text x="60" y="738" class="body">nginx · HTTPS subscription</text>
+<text x="60" y="768" class="small">TCP 443 · Import into the client</text>
+<rect x="448" y="704" width="384" height="88" rx="16" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="1.5"/>
+<text x="468" y="738" class="body">vnStat · Traffic accounting</text>
+<text x="468" y="768" class="small">Hourly usage and quota headers</text>
+<rect x="856" y="704" width="384" height="88" rx="16" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="1.5"/>
+<text x="876" y="738" class="body">ACME · Certificate handling</text>
+<text x="876" y="768" class="small">HTTP-01 challenge on TCP 80</text>
+</svg>

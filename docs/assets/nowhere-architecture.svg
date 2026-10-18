@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820" role="img" aria-labelledby="title desc">
+  <title id="title">Optional Nowhere backup relay architecture</title>
+  <desc id="desc">A selected application uses a local foreground Vector SOCKS5 proxy, then a TCP or QUIC connection to an independent Nowhere Portal on the VPS. The existing Mihomo fallback lane remains separate and unchanged.</desc>
+  <defs>
+    <marker id="arrowTeal" viewBox="0 0 10 10" markerWidth="7" markerHeight="7" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#0F766E"/></marker>
+    <style>
+      .title { font: 700 36px Arial, Helvetica, sans-serif; fill: #0F172A; }
+      .subtitle { font: 400 18px Arial, Helvetica, sans-serif; fill: #475569; }
+      .heading { font: 700 18px Arial, Helvetica, sans-serif; fill: #0F172A; }
+      .body { font: 400 18px Arial, Helvetica, sans-serif; fill: #334155; }
+      .small { font: 400 16px Arial, Helvetica, sans-serif; fill: #475569; }
+      .tiny { font: 600 14px Arial, Helvetica, sans-serif; fill: #0F766E; }
+      .card { fill: #FFFFFF; stroke: #D8E1EB; stroke-width: 2; }
+      .blue { fill: #EFF6FF; stroke: #2563EB; stroke-width: 2; }
+      .teal { fill: #ECFDF5; stroke: #0F766E; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="820" fill="#F5F7FB"/>
+  <text x="64" y="67" class="title">Optional Nowhere backup relay</text>
+  <text x="64" y="100" class="subtitle">A separate application-level SOCKS5 path. It does not join the existing Mihomo subscription or fallback chain.</text>
+
+  <rect x="64" y="132" width="1152" height="380" rx="22" class="card"/>
+  <rect x="88" y="154" width="104" height="30" rx="15" fill="#D1FAE5"/>
+  <text x="108" y="175" class="tiny">OPTIONAL</text>
+  <text x="212" y="176" class="heading">Nowhere path — selected application only</text>
+
+  <rect x="104" y="224" width="210" height="160" rx="18" class="card"/>
+  <rect x="130" y="252" width="42" height="42" rx="10" fill="#0F766E"/>
+  <path d="M142 281h18M151 270v22" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <text x="188" y="271" class="heading">Selected app</text>
+  <text x="130" y="325" class="body">Uses a local proxy</text>
+  <text x="130" y="354" class="small">Only the chosen app</text>
+
+  <line x1="314" y1="304" x2="410" y2="304" stroke="#0F766E" stroke-width="4" marker-end="url(#arrowTeal)"/>
+  <text x="328" y="282" class="small">SOCKS5</text>
+
+  <rect x="424" y="224" width="254" height="160" rx="18" class="teal"/>
+  <rect x="452" y="250" width="46" height="46" rx="12" fill="#0F766E"/>
+  <circle cx="475" cy="273" r="11" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+  <path d="M475 260v26M462 273h26" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <text x="514" y="271" class="heading">Local Vector</text>
+  <text x="452" y="325" class="body">127.0.0.1:1089</text>
+  <text x="452" y="354" class="small">Foreground, on-demand</text>
+  <text x="452" y="376" class="small">No system proxy change</text>
+
+  <line x1="678" y1="304" x2="781" y2="304" stroke="#0F766E" stroke-width="4" marker-end="url(#arrowTeal)"/>
+  <text x="699" y="282" class="small">TCP or QUIC</text>
+
+  <rect x="795" y="202" width="302" height="204" rx="18" class="teal"/>
+  <rect x="825" y="232" width="48" height="48" rx="12" fill="#0F766E"/>
+  <path d="M837 268h24M842 258h14M846 248h6" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <text x="889" y="254" class="heading">Independent Portal</text>
+  <text x="825" y="307" class="body">VPS · TCP / UDP 10443</text>
+  <text x="825" y="338" class="small">Own service, user, config, key</text>
+  <text x="825" y="363" class="small">and copied certificate</text>
+
+  <line x1="1097" y1="318" x2="1123" y2="318" stroke="#0F766E" stroke-width="4" marker-end="url(#arrowTeal)"/>
+  <text x="1163" y="271" class="heading" text-anchor="middle">Internet</text>
+  <path d="M1129 318c0-19 15-34 34-34s34 15 34 34-15 34-34 34-34-15-34-34Z" fill="none" stroke="#0F766E" stroke-width="3"/>
+  <path d="M1129 318h68M1163 284c10 9 15 21 15 34s-5 25-15 34M1163 284c-10 9-15 21-15 34s5 25 15 34" fill="none" stroke="#0F766E" stroke-width="2"/>
+
+  <rect x="104" y="422" width="1092" height="58" rx="14" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+  <text x="130" y="458" class="small">Path guard: verify the outer Portal path is direct and does not re-enter the primary transparent proxy.</text>
+
+  <rect x="64" y="548" width="1152" height="210" rx="22" class="card"/>
+  <rect x="88" y="570" width="136" height="30" rx="15" fill="#DBEAFE"/>
+  <text x="108" y="591" style="font:700 14px Arial, Helvetica, sans-serif;fill:#2563EB">UNCHANGED</text>
+  <text x="244" y="592" class="heading">Existing Mihomo fallback priority</text>
+  <text x="88" y="624" class="small">Independent from Nowhere. Priority order below; one selected node carries traffic.</text>
+
+  <rect x="104" y="656" width="255" height="66" rx="14" class="blue"/>
+  <text x="124" y="686" class="heading">1 · Reality</text><text x="124" y="710" class="small">TCP preferred</text>
+  <rect x="383" y="656" width="255" height="66" rx="14" class="blue"/>
+  <text x="403" y="686" class="heading">2 · Trojan</text><text x="403" y="710" class="small">TCP fallback</text>
+  <rect x="662" y="656" width="255" height="66" rx="14" class="blue"/>
+  <text x="682" y="686" class="heading">3 · HY2</text><text x="682" y="710" class="small">UDP / QUIC</text>
+  <rect x="941" y="656" width="255" height="66" rx="14" class="blue"/>
+  <text x="961" y="686" class="heading">4 · HY2-Hop</text><text x="961" y="710" class="small">UDP / QUIC port hopping</text>
+  <text x="104" y="742" class="small">Same VPS means a protocol option, not host or egress redundancy.</text>
+</svg>

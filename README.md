@@ -1,25 +1,68 @@
 # edge-infra
 
 A small, auditable proxy stack for a fresh Ubuntu VPS. It deploys a single
-user Mihomo subscription with a TCP-first fallback chain.
+user Mihomo subscription with a TCP-first fallback chain, plus an
+[optional Nowhere backup relay](#optional-nowhere-backup-relay) for applications
+that need a separate SOCKS5 entry point.
 
 ## Architecture
 
-```text
-Mihomo 主链路 fallback
-  1. DediOne-Reality   VLESS + Reality + Vision   TCP 9443
-  2. DediOne-Trojan    Trojan/TLS                TCP 8443
-  3. DediOne-HY2       Hysteria2                 UDP 443
-  4. DediOne-HY2-Hop   Hysteria2 port hopping    UDP 20000-20031 -> UDP 443
-
-HTTPS subscription    nginx                    TCP 443
-Monthly traffic       vnStat + response header hourly
-ACME challenge        nginx                    TCP 80
-```
+![Primary architecture: Mihomo selects Reality, Trojan, HY2 or HY2-Hop in priority order, with one shared VPS egress.](docs/assets/primary-architecture.svg)
 
 Reality and Trojan provide heterogeneous TCP fallbacks. HY2 and HY2-Hop remain
 UDP/QUIC paths. The published subscription contains one main group, ordered
 exactly as shown above.
+
+## Optional Nowhere backup relay
+
+Nowhere adds an independent VPS-side **Portal** and a client-side **Vector**.
+Vector exposes a local SOCKS5 proxy and connects to Portal over TCP or QUIC:
+
+![Optional Nowhere architecture: a selected application connects through local Vector and independent Portal; the existing Mihomo fallback remains separate.](docs/assets/nowhere-architecture.svg)
+
+This component is **opt-in**: `install.sh` does not install it, and it is not
+added to the Mihomo subscription or fallback chain. Portal has its own service,
+user, configuration, credentials, certificate copy, resource limits and
+rollback. A Portal on the same VPS adds a protocol option; it does not provide
+another host or exit route.
+
+### Server setup
+
+Use the reviewed checkout described under [Installation](#installation).
+Prepare a matching Let's Encrypt certificate and allow the selected TCP and
+UDP ports in the cloud firewall (both default to `10443`). Read the
+[Nowhere guide](docs/nowhere.md) for prerequisites and security boundaries,
+then copy and edit the public host/certificate settings outside Git:
+
+```sh
+sudo install -m 0600 env/nowhere.env.example /root/nowhere.env
+sudoedit /root/nowhere.env
+sudo scripts/nowhere-overlay.sh preflight --config /root/nowhere.env
+sudo scripts/nowhere-overlay.sh install --config /root/nowhere.env --yes
+sudo scripts/nowhere-overlay.sh verify
+```
+
+### Client usage
+
+Prepare a verified native Nowhere v3.0.1 binary and a user-owned `0600` client
+configuration outside Git, following the [client guide](docs/nowhere.md#client-boundary).
+Start one foreground Vector with either carrier:
+
+```sh
+scripts/nowhere-vector.sh --config /absolute/path/client.env tcp
+# Or use QUIC:
+scripts/nowhere-vector.sh --config /absolute/path/client.env quic
+```
+
+Set the chosen application's SOCKS5 proxy to `127.0.0.1:1089` (the default).
+Ctrl-C stops Vector; the launcher does not change the system proxy. This
+integration uses a separate Vector process rather than a native Mihomo node.
+
+Verify real HTTPS traffic through Vector; server-side `verify` checks only
+the local service. Behind a transparent proxy router, also verify that Portal
+traffic takes the intended direct path and does not loop through the primary
+proxy. See the guide for scoped routing and client configuration, and
+[Rollback](#rollback) to remove only this optional component.
 
 ## Recommended VPS
 
@@ -124,13 +167,21 @@ The repository checks can be run before deployment:
 
 ## Rollback
 
+Remove only the optional Nowhere overlay:
+
+```bash
+sudo scripts/nowhere-overlay.sh rollback --yes
+```
+
 Remove only the Reality overlay:
 
 ```bash
 sudo edge-infra-reality rollback --yes
 ```
 
-Remove the complete deployment:
+For a complete uninstall, first remove Nowhere and then Reality with the
+commands above, skipping overlays that were not installed. Then remove the
+base deployment:
 
 ```bash
 sudo edge-infra rollback --yes
@@ -138,6 +189,8 @@ sudo edge-infra rollback --yes
 
 Rollback preserves timestamped backups and fails closed if managed files were
 changed after installation. Use `--force` only after reviewing such changes.
+The base rollback refuses to run while Reality remains installed, even with
+`--force`, and does not remove the independent Nowhere overlay.
 
 ## Security properties
 
