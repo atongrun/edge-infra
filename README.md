@@ -1,5 +1,9 @@
 # edge-infra
 
+> **Looking for a VPS? Visit [AI Buy · 爱买](https://aibuy.bid/)** — my own VPS recommendation site.
+> I personally use [this DediOne Los Angeles plan](https://aibuy.bid/go/dedione-243) for edge-infra.
+> Affiliate disclosure: purchases through these links may earn me a commission.
+
 A small, auditable proxy stack for a fresh Ubuntu VPS. It deploys a single
 user Mihomo subscription with a TCP-first fallback chain, plus an
 [optional Nowhere backup relay](#optional-nowhere-backup-relay) for applications
@@ -66,7 +70,7 @@ proxy. See the guide for scoped routing and client configuration, and
 
 ## Recommended VPS
 
-This stack is deployed and tested on [DediOne Los Angeles (CMIN2+CUII)](https://dedione.com/aff.php?aff=457):
+This stack is deployed and tested on [DediOne Los Angeles (CMIN2+CUII)](https://aibuy.bid/go/dedione-243):
 $29.99/year gets 1 vCPU, 1 GB RAM, 10 GB NVMe, 500 GB/month traffic, and a
 200 Mbps port, measured at ~207 ms average latency, 0% packet loss, and
 ~50 Mbps throughput, with stable access to GitHub, Codex, Claude, Telegram,
