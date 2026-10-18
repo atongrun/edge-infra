@@ -61,6 +61,8 @@ load_config() {
   SUBSCRIPTION_FILE=''
   FIREWALL_MODE=auto
   NETWORK_INTERFACE=''
+  TRAFFIC_TOTAL_BYTES=500000000000
+  TRAFFIC_BILLING_MODE=both
 
   while IFS= read -r line || [[ -n $line ]]; do
     line=${line%$'\r'}
@@ -81,10 +83,14 @@ load_config() {
       TROJAN_PORT) TROJAN_PORT=$value ;;
       FIREWALL_MODE) FIREWALL_MODE=$value ;;
       NETWORK_INTERFACE) NETWORK_INTERFACE=$value ;;
+      TRAFFIC_TOTAL_BYTES) TRAFFIC_TOTAL_BYTES=$value ;;
+      TRAFFIC_BILLING_MODE) TRAFFIC_BILLING_MODE=$value ;;
       *) die "unknown config key: $key" ;;
     esac
   done < "$file"
 
+  [[ $TRAFFIC_TOTAL_BYTES =~ ^[1-9][0-9]{0,17}$ ]] || die "TRAFFIC_TOTAL_BYTES must be a positive byte count (at most 18 digits)"
+  [[ $TRAFFIC_BILLING_MODE == both || $TRAFFIC_BILLING_MODE == rx || $TRAFFIC_BILLING_MODE == tx ]] || die "TRAFFIC_BILLING_MODE must be both, rx or tx"
   valid_domain "$EDGE_DOMAIN" || die "EDGE_DOMAIN must be a valid FQDN"
   valid_domain "$SUB_DOMAIN" || die "SUB_DOMAIN must be a valid FQDN"
   [[ $EDGE_DOMAIN != "$SUB_DOMAIN" ]] || die "EDGE_DOMAIN and SUB_DOMAIN must differ"

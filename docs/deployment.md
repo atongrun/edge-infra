@@ -43,9 +43,11 @@ After `--yes`, installation performs these ordered phases:
 9. Validate sing-box, nginx and nftables before enabling isolated services.
 10. Write managed-file hashes and run `verify`.
 
-The traffic header maps public-interface RX to `upload`, TX to `download`, and
-uses `536870912000` bytes so Clash Verge displays a 500 GB total. vnStat uses
-the VPS calendar month and cannot reconstruct traffic from before its first
+The traffic header maps public-interface RX to `upload` and TX to `download`.
+The public install config supplies its exact quota and billing direction; the
+default is 500 GB decimal with both directions, while the audited DediOne
+500 GiB profile is an explicit host-specific override. vnStat uses the VPS
+calendar month and cannot reconstruct traffic from before its first
 installation; the provider portal remains the billing authority.
 
 An error after transaction state is created triggers best-effort rollback of edge-infra-owned objects. APT packages and the audit backup are preserved.

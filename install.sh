@@ -7,7 +7,7 @@
 #
 # Run from a reviewed checkout:
 #   git clone https://github.com/atongrun/edge-infra.git
-#   cd edge-infra && git checkout v0.1.1
+#   cd edge-infra && git checkout ac4f430befe06d59111a42f742a666ffc8b4d27b
 #   sudo ./install.sh
 set -Eeuo pipefail
 
@@ -22,19 +22,10 @@ INSTALL_ENV=/root/edge-infra-install.env
 REALITY_ENV=/root/edge-infra-reality.env
 STATE_FILE=/var/lib/edge-infra/state.env
 
-log()  { printf '[edge-infra] %s\n' "$*"; }
-warn() { printf '[edge-infra] WARNING: %s\n' "$*" >&2; }
-die()  { printf '[edge-infra] ERROR: %s\n' "$*" >&2; exit 1; }
+# shellcheck source=lib/common.sh
+source "$SCRIPT_DIR/lib/common.sh"
 
 # ---------- input helpers ----------
-valid_domain() { [[ ${#1} -le 253 && $1 =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$ ]]; }
-valid_ipv4() {
-  local -a p; IFS=. read -r -a p <<<"$1"; [[ ${#p[@]} -eq 4 ]] || return 1
-  for i in "${p[@]}"; do [[ $i =~ ^[0-9]{1,3}$ ]] && ((10#$i <= 255)) || return 1; done
-}
-valid_email() { [[ $1 =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$ ]]; }
-valid_port() { [[ $1 =~ ^[0-9]+$ ]] && ((10#$1 >= 1024 && 10#$1 <= 65535)); }
-
 prompt() { # prompt <var> <label> <default-or-empty>
   local var=$1 label=$2 default=${3:-} value
   while :; do
@@ -100,7 +91,9 @@ done
 echo
 log 'Reality overlay inputs (VLESS + Reality + Vision, TCP-stable front candidate)'
 prompt REALITY_PORT 'Reality TCP port' '9443'
-valid_port "$REALITY_PORT" || die 'invalid Reality port'
+if ! valid_port "$REALITY_PORT" || (( 10#$REALITY_PORT < 1024 )); then
+  die 'invalid Reality port'
+fi
 prompt_domain REALITY_TARGET 'Reality target (must serve TLS 1.3 + h2 + valid cert)' 'dl.google.com'
 prompt_domain REALITY_SERVER_NAME 'Reality SNI / server_name' "$REALITY_TARGET"
 
