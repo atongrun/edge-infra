@@ -33,7 +33,8 @@ and X. It is an affiliate link.
 
 This remains a pre-release until the disposable fresh-VPS lifecycle tests in
 [the release gates](docs/testing.md) pass. The commands below pin a reviewed
-revision containing the client DNS and IPv6 fixes; the older v0.1.1 tag does not.
+revision containing the client DNS/IPv6 fixes, lifecycle hardening and optional
+Nowhere support; the older v0.1.1 tag does not contain these fixes.
 
 Supported hosts:
 
@@ -53,9 +54,11 @@ Paste this prompt into Claude Code, Codex, Cursor, Cline, or another capable
 agent running on the new VPS:
 
 ```text
-Install and configure edge-infra on this fresh VPS. Read and follow the full
+Install and configure edge-infra on this fresh VPS.
+Reviewed revision: 818a4c6d4bf2b9d8c7d268e8ea3d3c69a651c5fc
+Set EDGE_INFRA_REVISION to that exact SHA. Read and follow the full
 installation guide step by step:
-https://raw.githubusercontent.com/atongrun/edge-infra/ac4f430befe06d59111a42f742a666ffc8b4d27b/docs/guide/installation.md
+https://raw.githubusercontent.com/atongrun/edge-infra/818a4c6d4bf2b9d8c7d268e8ea3d3c69a651c5fc/docs/guide/installation.md
 
 Deploy the complete topology: DediOne-Reality first on TCP 9443,
 DediOne-Trojan on TCP 8443, DediOne-HY2 on UDP 443, and DediOne-HY2-Hop on
@@ -73,7 +76,7 @@ If you prefer to run the installer yourself:
 ```bash
 git clone https://github.com/atongrun/edge-infra.git
 cd edge-infra
-git checkout ac4f430befe06d59111a42f742a666ffc8b4d27b
+git checkout 818a4c6d4bf2b9d8c7d268e8ea3d3c69a651c5fc
 sudo ./install.sh
 ```
 
@@ -88,7 +91,7 @@ Fetch the exact installation guide for the reviewed revision, then follow it
 step by step:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atongrun/edge-infra/ac4f430befe06d59111a42f742a666ffc8b4d27b/docs/guide/installation.md
+curl -fsSL https://raw.githubusercontent.com/atongrun/edge-infra/818a4c6d4bf2b9d8c7d268e8ea3d3c69a651c5fc/docs/guide/installation.md
 ```
 
 After cloning, the same guide is available at
