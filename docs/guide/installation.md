@@ -72,12 +72,17 @@ live topology.
 
 ## 3. Fetch and inspect the repository
 
-On the new VPS:
+On the new VPS, set `EDGE_INFRA_REVISION` to the full reviewed commit SHA from
+the installation prompt (the commit in the raw guide URL). Keep an explicitly
+reviewed local checkout on its selected revision. Do not substitute a moving
+branch or a release tag from an older guide.
 
 ```bash
+: "${EDGE_INFRA_REVISION:?Set the reviewed full commit SHA from the installation prompt}"
+[[ $EDGE_INFRA_REVISION =~ ^[0-9a-f]{40}$ ]] || exit 1
 git clone https://github.com/atongrun/edge-infra.git
 cd edge-infra
-git checkout v0.1.1
+git checkout --detach "$EDGE_INFRA_REVISION"
 ```
 
 If the operator explicitly selected a branch or commit, record it in the

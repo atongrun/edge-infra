@@ -31,6 +31,19 @@ write_valid_config "$config"
 load_config "$config"
 [[ $EDGE_DOMAIN == edge.example.com ]]
 [[ $HOP_PORT_END == 20031 ]]
+[[ $TRAFFIC_TOTAL_BYTES == 500000000000 && $TRAFFIC_BILLING_MODE == both ]]
+cp "$config" "$tmpdir/quota.env"
+printf 'TRAFFIC_TOTAL_BYTES=536870912000\nTRAFFIC_BILLING_MODE=tx\n' >> "$tmpdir/quota.env"
+load_config "$tmpdir/quota.env"
+[[ $TRAFFIC_TOTAL_BYTES == 536870912000 && $TRAFFIC_BILLING_MODE == tx ]]
+for setting in TRAFFIC_TOTAL_BYTES=0 TRAFFIC_TOTAL_BYTES=-1 TRAFFIC_TOTAL_BYTES=1000000000000000000 TRAFFIC_BILLING_MODE=outgoing; do
+  cp "$config" "$tmpdir/invalid-quota.env"
+  printf '%s\n' "$setting" >> "$tmpdir/invalid-quota.env"
+  if (load_config "$tmpdir/invalid-quota.env") >/dev/null 2>&1; then
+    echo "invalid traffic setting accepted: $setting" >&2
+    exit 1
+  fi
+done
 
 cp "$config" "$tmpdir/unknown.env"
 printf 'UNKNOWN_KEY=value\n' >> "$tmpdir/unknown.env"

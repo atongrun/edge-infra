@@ -2,6 +2,13 @@
 
 `rollback` and `uninstall` currently share the same V1 behavior:
 
+If the Reality overlay is installed, remove it first so its saved subscription
+is restored while the base services and sing-box runtime still exist:
+
+```bash
+sudo edge-infra-reality rollback --yes
+```
+
 ```bash
 sudo edge-infra rollback --yes
 ```
@@ -29,7 +36,7 @@ separate operator decision.
 
 ## Changed managed files
 
-If an operator edits a generated subscription or config, normal rollback stops rather than deleting it. Review and copy any desired changes, then run:
+If an operator edits a generated subscription or config, normal rollback stops rather than deleting it. Review and copy any desired changes. If the Reality overlay is present, roll it back first; then run:
 
 ```bash
 sudo edge-infra uninstall --yes --force

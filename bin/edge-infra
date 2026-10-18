@@ -32,7 +32,8 @@ NGINX_SITE=/etc/nginx/sites-available/edge-infra.conf
 NGINX_LINK=/etc/nginx/sites-enabled/edge-infra.conf
 TRAFFIC_SNIPPET_DIR=/etc/nginx/snippets/edge-infra-traffic
 TRAFFIC_SNIPPET=$TRAFFIC_SNIPPET_DIR/subscription-userinfo.conf
-TRAFFIC_TOTAL_BYTES=536870912000
+REALITY_STATE_FILE=/var/lib/edge-infra-reality/state.env
+REALITY_CLI_PATH=/usr/local/sbin/edge-infra-reality
 CERT_HOOK=/etc/letsencrypt/renewal-hooks/deploy/edge-infra
 SUB_ROOT=/var/www/edge-infra-subscription
 ACME_ROOT=/var/www/edge-infra-acme
@@ -306,6 +307,8 @@ write_state() {
     state_value SUBSCRIPTION_FILE "${SUBSCRIPTION_FILE:-}"
     state_value FIREWALL_MODE "$FIREWALL_MODE"
     state_value NETWORK_INTERFACE "$NETWORK_INTERFACE"
+    state_value TRAFFIC_TOTAL_BYTES "$TRAFFIC_TOTAL_BYTES"
+    state_value TRAFFIC_BILLING_MODE "$TRAFFIC_BILLING_MODE"
     state_value SSH_PORT "$SSH_PORT"
     state_value UFW_ACTION "$UFW_ACTION"
     state_value NGINX_WAS_INSTALLED "$NGINX_WAS_INSTALLED"
@@ -436,6 +439,7 @@ generate_and_render() {
   {
     state_value NETWORK_INTERFACE "$NETWORK_INTERFACE"
     state_value TOTAL_BYTES "$TRAFFIC_TOTAL_BYTES"
+    state_value BILLING_MODE "$TRAFFIC_BILLING_MODE"
     state_value SNIPPET_PATH "$TRAFFIC_SNIPPET"
   } > "$ETC_DIR/traffic.env"
   chmod 0600 "$ETC_DIR/traffic.env"
@@ -637,6 +641,9 @@ safe_remove_tree() {
 rollback_internal() {
   local automatic=${1:-0}
   load_state
+  if [[ -e $REALITY_STATE_FILE ]]; then
+    die "Reality overlay is installed; run '$REALITY_CLI_PATH rollback --yes' before base rollback"
+  fi
   if (( automatic == 0 && FORCE == 0 )) && [[ $INSTALL_PHASE == complete && ! -f $MANIFEST_FILE ]]; then
     die "managed-file manifest is missing; refusing rollback without --force"
   fi
@@ -776,9 +783,12 @@ verify_internal() {
   tcp_port_in_use 443 || die "TCP 443 is not listening"
   tcp_port_in_use "$TROJAN_PORT" || die "TCP $TROJAN_PORT is not listening"
   udp_port_or_range_in_use 443 443 || die "UDP 443 is not listening"
+  local traffic_total
+  traffic_total=$("$TRAFFIC_CLI_PATH" render | sed -nE 's/.*; total=([0-9]+)".*/\1/p')
+  [[ $traffic_total =~ ^[1-9][0-9]*$ ]] || die "traffic total is invalid"
   curl --fail --silent --show-error --resolve "$SUB_DOMAIN:443:127.0.0.1" \
     --dump-header - --output /dev/null "https://$SUB_DOMAIN/$SUBSCRIPTION_FILE" \
-    | grep -Eiq "^subscription-userinfo: upload=[0-9]+; download=[0-9]+; total=${TRAFFIC_TOTAL_BYTES}[[:space:]]*$" \
+    | grep -Eiq "^subscription-userinfo: upload=[0-9]+; download=[0-9]+; total=${traffic_total}[[:space:]]*$" \
     || die "subscription response is missing the traffic header"
   log "verify passed"
 }
@@ -786,6 +796,14 @@ verify_internal() {
 verify_cmd() {
   require_root
   verify_internal
+}
+
+verify_optional_reality() {
+  local state=$1 cli=$2
+  if [[ -e $state ]]; then
+    [[ -x $cli ]] || die "Reality state exists but its verifier is missing"
+    "$cli" verify
+  fi
 }
 
 health_cmd() {
@@ -806,6 +824,7 @@ health_cmd() {
   if command -v nstat >/dev/null 2>&1; then
     nstat -az UdpRcvbufErrors UdpSndbufErrors
   fi
+  verify_optional_reality /var/lib/edge-infra-reality/state.env /usr/local/sbin/edge-infra-reality
   log "health passed; external Mihomo client testing is still required"
 }
 

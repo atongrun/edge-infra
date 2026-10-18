@@ -81,6 +81,8 @@ fi
 
 grep -Fq 'include /etc/nginx/snippets/edge-infra-traffic/subscription-userinfo.conf;' \
   "$repo_root/templates/nginx/final.conf"
+grep -Fxq '        access_log off;' "$repo_root/templates/nginx/final.conf"
+grep -Fxq '        add_header Cache-Control "no-store" always;' "$repo_root/templates/nginx/final.conf"
 grep -Fq 'OnCalendar=hourly' "$repo_root/templates/systemd/edge-infra-traffic.timer"
 grep -Fxq 'ProtectSystem=strict' "$repo_root/templates/systemd/edge-infra-traffic.service"
 grep -Fxq \

@@ -4,7 +4,7 @@ set -eu
 repo_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_dir"
 
-for file in bin/edge-infra lib/common.sh scripts/*.sh tests/*.sh templates/letsencrypt/*; do
+for file in install.sh bin/edge-infra lib/common.sh scripts/*.sh tests/*.sh templates/letsencrypt/*; do
   bash -n "$file"
 done
 

@@ -7,7 +7,7 @@
 ./tests/run.sh
 ```
 
-GitHub Actions on Ubuntu 24.04 additionally runs Bash syntax checks and ShellCheck.
+GitHub Actions on Ubuntu 22.04 and 24.04 additionally runs Bash syntax checks and ShellCheck, including `install.sh`.
 
 The test suite currently covers strict config parsing, duplicate/unknown keys,
 hopping-range limits, template rendering, monthly traffic-header mapping and

@@ -31,6 +31,11 @@ and X. It is an affiliate link.
 
 ## Installation
 
+This remains a pre-release until the disposable fresh-VPS lifecycle tests in
+[the release gates](docs/testing.md) pass. The commands below pin a reviewed
+revision containing the client DNS/IPv6 fixes, lifecycle hardening and optional
+Nowhere support; the older v0.1.1 tag does not contain these fixes.
+
 Supported hosts:
 
 - Ubuntu 22.04 or 24.04;
@@ -49,9 +54,11 @@ Paste this prompt into Claude Code, Codex, Cursor, Cline, or another capable
 agent running on the new VPS:
 
 ```text
-Install and configure edge-infra on this fresh VPS. Read and follow the full
+Install and configure edge-infra on this fresh VPS.
+Reviewed revision: 818a4c6d4bf2b9d8c7d268e8ea3d3c69a651c5fc
+Set EDGE_INFRA_REVISION to that exact SHA. Read and follow the full
 installation guide step by step:
-https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.1/docs/guide/installation.md
+https://raw.githubusercontent.com/atongrun/edge-infra/818a4c6d4bf2b9d8c7d268e8ea3d3c69a651c5fc/docs/guide/installation.md
 
 Deploy the complete topology: DediOne-Reality first on TCP 9443,
 DediOne-Trojan on TCP 8443, DediOne-HY2 on UDP 443, and DediOne-HY2-Hop on
@@ -69,7 +76,7 @@ If you prefer to run the installer yourself:
 ```bash
 git clone https://github.com/atongrun/edge-infra.git
 cd edge-infra
-git checkout v0.1.1
+git checkout 818a4c6d4bf2b9d8c7d268e8ea3d3c69a651c5fc
 sudo ./install.sh
 ```
 
@@ -84,7 +91,7 @@ Fetch the exact installation guide for the reviewed revision, then follow it
 step by step:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atongrun/edge-infra/v0.1.1/docs/guide/installation.md
+curl -fsSL https://raw.githubusercontent.com/atongrun/edge-infra/818a4c6d4bf2b9d8c7d268e8ea3d3c69a651c5fc/docs/guide/installation.md
 ```
 
 After cloning, the same guide is available at
@@ -105,7 +112,7 @@ sudo edge-infra health
 Import the printed subscription URL into Mihomo/Clash Verge and perform an
 external smoke test. Treat the URL as a credential: do not commit it or expose
 it in logs. Refreshing the existing subscription card shows the current
-vnStat month usage against a 500 GB total; no second URL or client plugin is
+vnStat month usage against the configured quota (default 500 GB, decimal); no second URL or client plugin is
 required.
 
 The repository checks can be run before deployment:
@@ -144,6 +151,7 @@ changed after installation. Use `--force` only after reviewing such changes.
 
 ## Documentation
 
+- [Optional independent Nowhere backup relay](docs/nowhere.md)
 - [Client DNS and IPv6 routing](docs/client-egress.md)
 - [Node optimization and acceptance](docs/node-optimization.md)
 - [Full installation guide](docs/guide/installation.md)
@@ -152,6 +160,7 @@ changed after installation. Use `--force` only after reviewing such changes.
 - [Reality overlay](docs/reality-candidate.md)
 - [Rollback](docs/rollback.md)
 - [Security model](docs/security.md)
+- [Host maintenance checklist](docs/hardening-checklist.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
 ## License
