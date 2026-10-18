@@ -9,22 +9,23 @@ trap 'rm -rf -- "$tmpdir"' EXIT
 [[ -x $launcher ]] || { echo 'nowhere vector launcher is not executable' >&2; exit 1; }
 
 mock="$tmpdir/nowhere"
-printf '%s\n' \
-  '#!/usr/bin/env bash' \
-  'set -Eeuo pipefail' \
-  'if [[ ${1:-} == --version ]]; then' \
-  "  printf '%s\\n' 'Nowhere v3.0.1'" \
-  '  exit 0' \
-  'fi' \
-  'case ${1:-} in' \
-  '  vector://11111111111111111111111111111111@203.0.113.7/tcp:10443?in=127.0.0.1:1089\&sni=portal.example.com\&morph=1|vector://11111111111111111111111111111111@203.0.113.7/udp:10443?in=127.0.0.1:1089\&sni=portal.example.com\&morph=1)' \
-  "    printf '%s\\n' 'mock vector received expected argument shape'" \
-  '    ;;' \
-  '  *)' \
-  "    echo 'mock vector received unexpected argument shape' >&2" \
-  '    exit 1' \
-  '    ;;' \
-  'esac' >"$mock"
+cat >"$mock" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+if [[ ${1:-} == --version ]]; then
+  printf '%s\n' 'Nowhere v3.0.1'
+  exit 0
+fi
+case ${1:-} in
+  vector://11111111111111111111111111111111@203.0.113.7/tcp:10443?in=127.0.0.1:1089\&sni=portal.example.com\&morph=1|vector://11111111111111111111111111111111@203.0.113.7/udp:10443?in=127.0.0.1:1089\&sni=portal.example.com\&morph=1)
+    printf '%s\n' 'mock vector received expected argument shape'
+    ;;
+  *)
+    echo 'mock vector received unexpected argument shape' >&2
+    exit 1
+    ;;
+esac
+EOF
 chmod 0755 "$mock"
 
 write_base_config() {
@@ -62,7 +63,7 @@ grep -Fxq 'config permissions must be 0600' "$tmpdir/bad-mode.out"
 bad_field="$tmpdir/bad-field.env"
 write_base_config "$bad_field"
 marker="$tmpdir/source-ran"
-printf 'UNSAFE_SHELL=$(touch %s)\n' "$marker" >>"$bad_field"
+printf 'UNSAFE_SHELL=$%s\n' "(touch $marker)" >>"$bad_field"
 if "$launcher" --config "$bad_field" >"$tmpdir/bad-field.out" 2>&1; then
   echo 'unknown shell-like field unexpectedly ran' >&2
   exit 1
@@ -79,13 +80,14 @@ fi
 grep -Fxq 'SHARED_KEY must be exactly 32 lowercase hexadecimal characters' "$tmpdir/uppercase-key.out"
 
 alpha_mock="$tmpdir/nowhere-alpha"
-printf '%s\n' \
-  '#!/usr/bin/env bash' \
-  'if [[ ${1:-} == --version ]]; then' \
-  "  printf '%s\\n' 'Nowhere v3.0.1-alpha'" \
-  '  exit 0' \
-  'fi' \
-  'exit 1' >"$alpha_mock"
+cat >"$alpha_mock" <<'EOF'
+#!/usr/bin/env bash
+if [[ ${1:-} == --version ]]; then
+  printf '%s\n' 'Nowhere v3.0.1-alpha'
+  exit 0
+fi
+exit 1
+EOF
 chmod 0755 "$alpha_mock"
 alpha_config="$tmpdir/alpha-version.env"
 write_base_config "$alpha_config" "$alpha_mock"

@@ -18,6 +18,7 @@ grep -Fq 'Upstream Nowhere takes its service URL on argv' "$repo_root/docs/nowhe
 
 tmpdir=$(mktemp -d /tmp/edge-infra-nowhere-test.XXXXXX)
 trap 'rm -rf -- "$tmpdir"' EXIT
+# shellcheck source=../scripts/nowhere-overlay.sh
 EDGE_INFRA_NOWHERE_SOURCE_ONLY=1 source "$script"
 require_root() { :; }
 STATE_DIR=$tmpdir/state; STATE_FILE=$STATE_DIR/state.env

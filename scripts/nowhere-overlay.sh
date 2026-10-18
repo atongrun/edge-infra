@@ -324,9 +324,13 @@ cleanup_failed_install() {
   (( CREATED_GROUP == 0 )) || groupdel "$SERVICE_USER" >/dev/null 2>&1 || true
   return "$status"
 }
-trap 'status=$?; cleanup_failed_install "$status"; exit "$status"' EXIT
-
-load_state() { [[ -f $STATE_FILE && ! -L $STATE_FILE ]] || die 'Nowhere overlay is not installed'; set -a; . "$STATE_FILE"; set +a; }
+load_state() {
+  [[ -f $STATE_FILE && ! -L $STATE_FILE ]] || die 'Nowhere overlay is not installed'
+  set -a
+  # shellcheck source=/dev/null
+  . "$STATE_FILE"
+  set +a
+}
 wait_for_listener() {
   local protocol=$1 port=$2
   for _ in {1..20}; do
@@ -423,4 +427,7 @@ main() {
     *) die "unknown action: $action" ;;
   esac
 }
-if [[ ${EDGE_INFRA_NOWHERE_SOURCE_ONLY:-0} != 1 ]]; then main "$@"; fi
+if [[ ${EDGE_INFRA_NOWHERE_SOURCE_ONLY:-0} != 1 ]]; then
+  trap 'status=$?; cleanup_failed_install "$status"; exit "$status"' EXIT
+  main "$@"
+fi
