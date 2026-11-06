@@ -77,4 +77,16 @@ grep -q '^- DOMAIN-SUFFIX,chatgpt.com,主链路$' "$output"
 grep -q '^- MATCH,主链路$' "$output"
 grep -q '^  - 223.5.5.5$' "$output"
 
+CF_STATE_FILE=$tmpdir/cf-state
+touch "$CF_STATE_FILE"
+awk '/^proxy-groups:$/ {print "- name: DediOne-Cloudflare"; print "  type: vless"} {print}' "$output" > "$tmpdir/cf-input"
+render_main_chain "$tmpdir/cf-input" "$tmpdir/cf-output"
+[[ $(grep -c '^  - DediOne-Cloudflare$' "$tmpdir/cf-output") == 1 ]]
+check_main_chain "$tmpdir/cf-output"
+rm -f "$CF_STATE_FILE"
+if (check_main_chain "$tmpdir/cf-output") >/dev/null 2>&1; then
+  echo 'accepted Cloudflare node without overlay state' >&2
+  exit 1
+fi
+
 echo 'test-main-chain-policy: passed'

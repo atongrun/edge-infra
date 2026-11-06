@@ -215,6 +215,7 @@ The base rollback refuses to run while Reality remains installed, even with
 - [Architecture and ownership](docs/architecture.md)
 - [Deployment contract](docs/deployment.md)
 - [Reality overlay](docs/reality-candidate.md)
+- [Cloudflare XHTTP backup plan](docs/resilience-upgrade-plan.md)
 - [Rollback](docs/rollback.md)
 - [Security model](docs/security.md)
 - [Host maintenance checklist](docs/hardening-checklist.md)
