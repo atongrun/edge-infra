@@ -1,0 +1,26 @@
+[Unit]
+Description=edge-infra independent Cloudflare Tunnel connector
+After=network-online.target edge-infra-cf-ws.service
+Wants=network-online.target
+Requires=edge-infra-cf-ws.service
+
+[Service]
+User=edge-cloudflared
+Group=edge-cloudflared
+DynamicUser=true
+LoadCredential=tunnel.json:/etc/edge-infra-cloudflare/tunnel.json
+LoadCredential=config.yml:/etc/edge-infra-cloudflare/config.yml
+ExecStart=/usr/local/lib/edge-infra-cloudflare/cloudflared tunnel --no-autoupdate --protocol http2 --config %d/config.yml run
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

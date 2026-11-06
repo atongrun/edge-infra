@@ -1,0 +1,12 @@
+{
+  "log": {"level": "info", "timestamp": true},
+  "inbounds": [{
+    "type": "vless",
+    "tag": "cf-ws-in",
+    "listen": "127.0.0.1",
+    "listen_port": ${CF_ORIGIN_PORT},
+    "users": [{"name": "cloudflare", "uuid": "${CF_UUID}"}],
+    "transport": {"type": "ws", "path": "${CF_WS_PATH}"}
+  }],
+  "outbounds": [{"type": "direct", "tag": "direct"}]
+}

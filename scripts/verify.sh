@@ -27,9 +27,19 @@ grep -Eq '^SING_BOX_VERSION=[0-9]+\.[0-9]+\.[0-9]+$' versions.env
 grep -Eq '^SING_BOX_AMD64_SHA256=[a-f0-9]{64}$' versions.env
 grep -Eq '^SING_BOX_ARM64_SHA256=[a-f0-9]{64}$' versions.env
 git ls-files --error-unmatch versions.env >/dev/null
+grep -Eq '^UPGRADE_SING_BOX_VERSION=[0-9]+\.[0-9]+\.[0-9]+$' env/resilience-versions.env
+grep -Eq '^UPGRADE_SING_BOX_AMD64_SHA256=[a-f0-9]{64}$' env/resilience-versions.env
+grep -Eq '^UPGRADE_SING_BOX_ARM64_SHA256=[a-f0-9]{64}$' env/resilience-versions.env
+grep -Eq '^CLOUDFLARED_VERSION=[0-9]+\.[0-9]+\.[0-9]+$' env/resilience-versions.env
+grep -Eq '^CLOUDFLARED_AMD64_SHA256=[a-f0-9]{64}$' env/resilience-versions.env
+grep -Eq '^CLOUDFLARED_ARM64_SHA256=[a-f0-9]{64}$' env/resilience-versions.env
+grep -Eq '^CF_SING_BOX_VERSION=[0-9]+\.[0-9]+\.[0-9]+$' env/resilience-versions.env
+grep -Eq '^CF_SING_BOX_AMD64_SHA256=[a-f0-9]{64}$' env/resilience-versions.env
+grep -Eq '^CF_SING_BOX_ARM64_SHA256=[a-f0-9]{64}$' env/resilience-versions.env
+git ls-files --error-unmatch env/resilience-versions.env >/dev/null
 grep -q '^MIT License$' LICENSE
 
-if git ls-files | grep -E '(^|/)[^/]*\.env$|(^|/)secrets\.[^/]+$' | grep -vE '\.example$|^versions\.env$'; then
+if git ls-files | grep -E '(^|/)[^/]*\.env$|(^|/)secrets\.[^/]+$' | grep -vE '\.example$|^versions\.env$|^env/resilience-versions\.env$'; then
   echo 'Tracked runtime environment or secret file found' >&2
   exit 1
 fi

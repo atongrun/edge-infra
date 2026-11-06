@@ -34,6 +34,7 @@ TRAFFIC_SNIPPET_DIR=/etc/nginx/snippets/edge-infra-traffic
 TRAFFIC_SNIPPET=$TRAFFIC_SNIPPET_DIR/subscription-userinfo.conf
 REALITY_STATE_FILE=/var/lib/edge-infra-reality/state.env
 REALITY_CLI_PATH=/usr/local/sbin/edge-infra-reality
+CF_STATE_FILE=/var/lib/edge-infra-cloudflare/state.env
 CERT_HOOK=/etc/letsencrypt/renewal-hooks/deploy/edge-infra
 SUB_ROOT=/var/www/edge-infra-subscription
 ACME_ROOT=/var/www/edge-infra-acme
@@ -641,6 +642,9 @@ safe_remove_tree() {
 rollback_internal() {
   local automatic=${1:-0}
   load_state
+  if [[ -e $CF_STATE_FILE ]]; then
+    die "Cloudflare overlay is installed; remove it before base rollback"
+  fi
   if [[ -e $REALITY_STATE_FILE ]]; then
     die "Reality overlay is installed; run '$REALITY_CLI_PATH rollback --yes' before base rollback"
   fi
