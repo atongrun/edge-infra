@@ -1,0 +1,25 @@
+[Unit]
+Description=edge-infra independent Cloudflare VLESS WebSocket origin
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=edge-cf-ws
+Group=edge-cf-ws
+DynamicUser=true
+LoadCredential=ws.json:/etc/edge-infra-cloudflare/ws.json
+ExecStartPre=/usr/local/lib/edge-infra-cloudflare/sing-box check -c %d/ws.json
+ExecStart=/usr/local/lib/edge-infra-cloudflare/sing-box run -c %d/ws.json
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
