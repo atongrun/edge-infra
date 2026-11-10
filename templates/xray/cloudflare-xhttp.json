@@ -1,0 +1,22 @@
+{
+  "log": {"loglevel": "warning"},
+  "inbounds": [{
+    "tag": "cf-xhttp-in",
+    "listen": "127.0.0.1",
+    "port": ${CF_XRAY_PORT},
+    "protocol": "vless",
+    "settings": {
+      "decryption": "none",
+      "clients": [{"id": "${CF_UUID}"}]
+    },
+    "streamSettings": {
+      "network": "xhttp",
+      "security": "none",
+      "xhttpSettings": {
+        "path": "${CF_XHTTP_PATH}",
+        "mode": "packet-up"
+      }
+    }
+  }],
+  "outbounds": [{"protocol": "freedom", "tag": "direct"}]
+}

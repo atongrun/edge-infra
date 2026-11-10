@@ -9,6 +9,7 @@ printf 'INSTALL_PHASE=complete\n' > "$tmpdir/state.env"
 EDGE_INFRA_SOURCE_ONLY=1 source "$repo_root/bin/edge-infra"
 STATE_FILE="$tmpdir/state.env"
 REALITY_STATE_FILE="$tmpdir/reality-state.env"
+CF_STATE_FILE="$tmpdir/cloudflare-state.env"
 REALITY_CLI_PATH=/usr/local/sbin/edge-infra-reality
 systemctl() { touch "$tmpdir/systemctl-called"; }
 safe_remove_tree() { touch "$tmpdir/tree-removal-called"; }
@@ -32,6 +33,14 @@ grep -Fq 'edge-infra-reality rollback --yes' "$tmpdir/force-err"
 
 # Without an overlay, retain the pre-existing manifest-drift refusal path.
 rm -f "$REALITY_STATE_FILE"
+touch "$CF_STATE_FILE"
+if (rollback_internal 0) >"$tmpdir/cf-out" 2>"$tmpdir/cf-err"; then
+  echo 'base rollback accepted an installed Cloudflare overlay' >&2
+  exit 1
+fi
+grep -Fq 'Cloudflare overlay is installed' "$tmpdir/cf-err"
+[[ ! -e $tmpdir/systemctl-called && ! -e $tmpdir/tree-removal-called ]]
+rm -f "$CF_STATE_FILE"
 printf 'original\n' > "$tmpdir/subscription.yaml"
 checksum=$(sha256sum "$tmpdir/subscription.yaml" | awk '{print $1}')
 printf '%s  %s\n' "$checksum" "$tmpdir/subscription.yaml" > "$tmpdir/manifest.sha256"

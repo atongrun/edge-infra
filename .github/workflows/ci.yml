@@ -22,7 +22,7 @@ jobs:
 
       - name: Shell syntax
         run: |
-          find install.sh bin lib scripts tests templates/letsencrypt -type f -print0 \
+          find install.sh bin lib scripts tests templates/letsencrypt -type f ! -name '*.py' -print0 \
             | xargs -0 -n1 bash -n
 
       - name: ShellCheck

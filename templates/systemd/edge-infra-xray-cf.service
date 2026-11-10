@@ -1,0 +1,36 @@
+[Unit]
+Description=edge-infra independent Cloudflare XHTTP Xray origin
+After=network-online.target nss-lookup.target time-sync.target
+Wants=network-online.target time-sync.target
+StartLimitIntervalSec=120
+StartLimitBurst=30
+
+[Service]
+DynamicUser=true
+LoadCredential=xray.json:/etc/edge-infra-cloudflare/xray.json
+ExecStartPre=/usr/local/lib/edge-infra-cloudflare/xray run -test -config %d/xray.json
+ExecStart=/usr/local/lib/edge-infra-cloudflare/xray run -config %d/xray.json
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=1048576
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

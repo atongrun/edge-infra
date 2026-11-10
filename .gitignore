@@ -14,3 +14,5 @@ backups/
 rendered/
 *.bak
 *.swp
+__pycache__/
+*.pyc

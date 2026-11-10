@@ -15,6 +15,7 @@ UNIT_PATH=/etc/systemd/system/$UNIT_NAME
 CLI_PATH=/usr/local/sbin/edge-infra-reality
 UFW_COMMENT=edge-infra-reality
 NODE_NAME=DediOne-Reality
+CF_STATE_FILE=/var/lib/edge-infra-cloudflare/state.env
 
 CONFIG_FILE=''
 ASSUME_YES=0
@@ -241,12 +242,21 @@ check_main_chain() {
     in_group && /^  - / {sub(/^  - /, ""); print}
   ' "$file")
   expected_order=$'DediOne-Reality\nDediOne-Trojan\nDediOne-HY2\nDediOne-HY2-Hop'
+  if grep -q '^- name: DediOne-Cloudflare$' "$file"; then
+    [[ -f $CF_STATE_FILE ]] || die 'Cloudflare node exists without overlay state'
+    [[ $(grep -c '^- name: DediOne-Cloudflare$' "$file") == 1 ]] || die 'duplicate Cloudflare node'
+    expected_order+=$'\nDediOne-Cloudflare'
+  fi
   [[ $actual_order == "$expected_order" ]] || die 'main chain order must be Reality, Trojan, HY2, HY2-Hop'
 }
 
 render_main_chain() {
-  local source=$1 output=$2
-  awk '
+  local source=$1 output=$2 cf=0
+  if grep -q '^- name: DediOne-Cloudflare$' "$source"; then
+    [[ -f $CF_STATE_FILE ]] || die 'Cloudflare node exists without overlay state'
+    cf=1
+  fi
+  awk -v cf="$cf" '
     function print_main_chain() {
       print "proxy-groups:"
       print "- name: 主链路"
@@ -256,6 +266,7 @@ render_main_chain() {
       print "  - DediOne-Trojan"
       print "  - DediOne-HY2"
       print "  - DediOne-HY2-Hop"
+      if (cf) print "  - DediOne-Cloudflare"
       print "  url: https://www.gstatic.com/generate_204"
       print "  interval: 60"
       print "  timeout: 5000"
@@ -442,6 +453,7 @@ simplify_groups() {
   require_root
   ((ASSUME_YES == 1)) || die 'simplify requires --yes'
   acquire_lock
+  [[ ! -e $CF_STATE_FILE ]] || die 'Cloudflare overlay is installed; remove it before changing the main chain'
   load_state
 
   local current_hash policy_backup staged
@@ -484,6 +496,7 @@ rollback_overlay() {
   require_root
   ((ASSUME_YES == 1)) || die 'rollback requires --yes'
   acquire_lock
+  [[ ! -e $CF_STATE_FILE ]] || die 'Cloudflare overlay is installed; remove it before Reality rollback'
   load_state
   if [[ -f $SUBSCRIPTION_FILE && $(sha256_file "$SUBSCRIPTION_FILE") != "$INSTALLED_SUBSCRIPTION_SHA256" && $FORCE == 0 ]]; then
     die 'subscription changed after Reality install; inspect it or use --force intentionally'
