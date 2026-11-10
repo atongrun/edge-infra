@@ -22,7 +22,6 @@ UNIT_PATH=/etc/systemd/system/$UNIT_NAME
 CLI_PATH=/usr/local/sbin/edge-infra-extra
 RENEW_HOOK=/etc/letsencrypt/renewal-hooks/deploy/restart-sing-box-extra
 REALITY_STATE=${EDGE_INFRA_REALITY_STATE:-/var/lib/edge-infra-reality/state.env}
-CF_STATE_FILE=/var/lib/edge-infra-cloudflare/state.env
 UFW_COMMENT_ANYTLS=edge-infra-anytls
 UFW_COMMENT_TUIC=edge-infra-tuic
 ANYTLS_NODE=DediOne-AnyTLS
@@ -469,8 +468,12 @@ rollback_overlay() {
   fi
   systemctl disable --now "$UNIT_NAME" >/dev/null 2>&1 || true
   if command -v ufw >/dev/null 2>&1; then
-    [[ $UFW_ANYTLS_ADDED == 1 ]] && ufw --force delete allow "$ANYTLS_PORT/tcp" comment "$UFW_COMMENT_ANYTLS" || true
-    [[ $UFW_TUIC_ADDED == 1 ]] && ufw --force delete allow "$TUIC_PORT/udp" comment "$UFW_COMMENT_TUIC" || true
+    if [[ $UFW_ANYTLS_ADDED == 1 ]]; then
+      ufw --force delete allow "$ANYTLS_PORT/tcp" comment "$UFW_COMMENT_ANYTLS" || true
+    fi
+    if [[ $UFW_TUIC_ADDED == 1 ]]; then
+      ufw --force delete allow "$TUIC_PORT/udp" comment "$UFW_COMMENT_TUIC" || true
+    fi
   fi
   install -o "$SUBSCRIPTION_UID" -g "$SUBSCRIPTION_GID" -m "$SUBSCRIPTION_MODE" \
     "$BACKUP_DIR/subscription.yaml" "$SUBSCRIPTION_FILE"
