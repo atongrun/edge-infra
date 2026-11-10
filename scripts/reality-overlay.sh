@@ -16,6 +16,7 @@ CLI_PATH=/usr/local/sbin/edge-infra-reality
 UFW_COMMENT=edge-infra-reality
 NODE_NAME=DediOne-Reality
 CF_STATE_FILE=/var/lib/edge-infra-cloudflare/state.env
+EXTRA_STATE_FILE=/var/lib/edge-infra-extra/state.env
 
 CONFIG_FILE=''
 ASSUME_YES=0
@@ -247,16 +248,25 @@ check_main_chain() {
     [[ $(grep -c '^- name: DediOne-Cloudflare$' "$file") == 1 ]] || die 'duplicate Cloudflare node'
     expected_order+=$'\nDediOne-Cloudflare'
   fi
+  # The independent AnyTLS/TUIC overlay appends two nodes after HY2-Hop.
+  if grep -Eq '^- name: DediOne-(AnyTLS|TUIC)$' "$file"; then
+    [[ -f $EXTRA_STATE_FILE ]] || die 'AnyTLS/TUIC nodes exist without extra overlay state'
+    expected_order+=$'\nDediOne-AnyTLS\nDediOne-TUIC'
+  fi
   [[ $actual_order == "$expected_order" ]] || die 'main chain order must be Reality, Trojan, HY2, HY2-Hop'
 }
 
 render_main_chain() {
-  local source=$1 output=$2 cf=0
+  local source=$1 output=$2 cf=0 extra=0
   if grep -q '^- name: DediOne-Cloudflare$' "$source"; then
     [[ -f $CF_STATE_FILE ]] || die 'Cloudflare node exists without overlay state'
     cf=1
   fi
-  awk -v cf="$cf" '
+  if grep -Eq '^- name: DediOne-(AnyTLS|TUIC)$' "$source"; then
+    [[ -f $EXTRA_STATE_FILE ]] || die 'AnyTLS/TUIC nodes exist without extra overlay state'
+    extra=1
+  fi
+  awk -v cf="$cf" -v extra="$extra" '
     function print_main_chain() {
       print "proxy-groups:"
       print "- name: 主链路"
@@ -267,6 +277,7 @@ render_main_chain() {
       print "  - DediOne-HY2"
       print "  - DediOne-HY2-Hop"
       if (cf) print "  - DediOne-Cloudflare"
+      if (extra) { print "  - DediOne-AnyTLS"; print "  - DediOne-TUIC" }
       print "  url: https://www.gstatic.com/generate_204"
       print "  interval: 60"
       print "  timeout: 5000"
@@ -441,7 +452,13 @@ verify_overlay() {
   fi
   [[ $(grep -c '^- name: DediOne-Reality$' "$SUBSCRIPTION_FILE") == 1 ]] || die 'Reality subscription node missing'
   check_main_chain "$SUBSCRIPTION_FILE"
-  [[ $(sha256_file "$SUBSCRIPTION_FILE") == "$INSTALLED_SUBSCRIPTION_SHA256" ]] || die 'subscription changed after install'
+  local live_hash extra_hash=''
+  live_hash=$(sha256_file "$SUBSCRIPTION_FILE")
+  if [[ -f $EXTRA_STATE_FILE && ! -L $EXTRA_STATE_FILE ]]; then
+    extra_hash=$(awk -F= '$1 == "INSTALLED_SUBSCRIPTION_SHA256" {print substr($0, index($0, "=") + 1); exit}' "$EXTRA_STATE_FILE")
+  fi
+  [[ $live_hash == "$INSTALLED_SUBSCRIPTION_SHA256" || ( -n $extra_hash && $live_hash == "$extra_hash" ) ]] \
+    || die 'subscription changed after install'
   check_target
   baseline_service_active edge-infra-hy2.service sing-box.service || die 'baseline HY2 service is not active'
   baseline_service_active edge-infra-trojan.service sing-box-trojan.service || die 'baseline Trojan service is not active'
@@ -497,6 +514,7 @@ rollback_overlay() {
   ((ASSUME_YES == 1)) || die 'rollback requires --yes'
   acquire_lock
   [[ ! -e $CF_STATE_FILE ]] || die 'Cloudflare overlay is installed; remove it before Reality rollback'
+  [[ ! -e $EXTRA_STATE_FILE ]] || die 'AnyTLS/TUIC overlay is installed; roll it back before Reality rollback'
   load_state
   if [[ -f $SUBSCRIPTION_FILE && $(sha256_file "$SUBSCRIPTION_FILE") != "$INSTALLED_SUBSCRIPTION_SHA256" && $FORCE == 0 ]]; then
     die 'subscription changed after Reality install; inspect it or use --force intentionally'
