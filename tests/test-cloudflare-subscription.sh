@@ -82,4 +82,15 @@ if python3 "$root/scripts/cloudflare-subscription.py" --source "$tmp/input" --ou
   --preferred-ip not-an-ip 2>/dev/null; then
   echo 'accepted an invalid preferred IP' >&2; exit 1
 fi
+awk '
+  $0 == "  - DediOne-HY2-Hop" {print; print "  - DediOne-AnyTLS"; print "  - DediOne-TUIC"; next}
+  {print}
+' "$tmp/input" > "$tmp/with-extra"
+if python3 "$root/scripts/cloudflare-subscription.py" --source "$tmp/with-extra" --output "$tmp/extra-out" "${args[@]}" \
+  >"$tmp/extra-out.log" 2>"$tmp/extra-err"; then
+  echo 'accepted a chain that already publishes AnyTLS/TUIC' >&2
+  exit 1
+fi
+grep -q 'unexpected main-chain order' "$tmp/extra-err"
+[[ ! -e $tmp/extra-out ]]
 echo 'test-cloudflare-subscription: passed'

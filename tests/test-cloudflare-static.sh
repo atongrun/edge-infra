@@ -37,7 +37,12 @@ if grep -Eq '^[A-Z_]+=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
   echo 'example env contains a UUID value' >&2
   exit 1
 fi
-grep -q '^XRAY_VERSION=' env/resilience-versions.env.example
+grep -q '^XRAY_VERSION=26\.11\.9$' env/resilience-versions.env.example
+grep -q 'AnyTLS/TUIC nodes are already published' scripts/publish-cloudflare-subscription.sh
+if grep -q 'DediOne-Cloudflare\|cloudflared' templates/mihomo/edge.yaml; then
+  echo 'default subscription reintroduced a Cloudflare or Tunnel node' >&2
+  exit 1
+fi
 grep -q '^XRAY_AMD64_SHA256=[a-f0-9]\{64\}$' env/resilience-versions.env.example
 grep -q '^XRAY_ARM64_SHA256=[a-f0-9]\{64\}$' env/resilience-versions.env.example
 
