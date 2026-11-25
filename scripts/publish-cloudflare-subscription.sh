@@ -86,6 +86,11 @@ publish() {
   [[ $(sha256sum "$subscription" | awk '{print $1}') == "$original_hash" ]] \
     || die 'subscription drift detected; inspect it before publishing'
   ! grep -Fq -- '- name: DediOne-Cloudflare' "$subscription" || die 'Cloudflare node already exists'
+  # AnyTLS/TUIC stay at the tail of the published chain. Do not splice the
+  # Cloudflare node into that chain or put it back into the default subscription.
+  if grep -Eq '^- name: DediOne-(AnyTLS|TUIC)$' "$subscription"; then
+    die 'AnyTLS/TUIC nodes are already published; refusing to insert DediOne-Cloudflare or rewrite the extra chain'
+  fi
   [[ -f $STATE/uuid && ! -L $STATE/uuid ]] || die 'UUID state file is missing'
   [[ $(stat -c '%a' "$STATE/uuid") == 600 ]] || die 'UUID state file must be private'
   [[ -f $REALITY_CLI && ! -L $REALITY_CLI && -x $REALITY_CLI ]] || die 'Reality CLI is missing'

@@ -54,7 +54,7 @@ An error after transaction state is created triggers best-effort rollback of edg
 
 ## Upstream supply chain
 
-`versions.env` pins the sing-box version and official GitHub asset SHA256 for each supported architecture. Upgrades must change the version and checksum together and cite the upstream SagerNet release.
+`versions.env` pins sing-box 1.14.4, the latest stable SagerNet release, for each supported architecture. v1.15 prereleases are excluded. The checksums are the SHA256 of `sing-box-1.14.4-linux-amd64.tar.gz` and `sing-box-1.14.4-linux-arm64.tar.gz` from the [v1.14.4 release](https://github.com/SagerNet/sing-box/releases/tag/v1.14.4), not the glibc or musl variants. `env/resilience-versions.env.example` repeats those bytes as `UPGRADE_SING_BOX_*` for the legacy upgrade and pins Xray-core 26.11.9 separately. Upgrades must change a version and both of its checksums together.
 
 The project itself should be installed from a reviewed Git tag or GitHub Release. Do not advertise a moving `main` branch as a stable release and do not offer `curl | sudo sh` instructions.
 

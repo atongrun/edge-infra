@@ -32,6 +32,11 @@ HY2 and HY2-Hop remain in the same UDP/QUIC failure domain. Port hopping can wor
   only the edge-infra traffic snippet and gracefully reloads nginx hourly.
 - Certbot uses nginx's webroot and a deploy hook that validates before reload/restart.
 
+Hosts that predate the `edge-infra-*` unit names run `sing-box.service`,
+`sing-box-trojan.service`, `sing-box-reality.service`, `sing-box-extra.service`
+and `hy2-port-hopping.service` instead. `scripts/upgrade-sing-box.sh` targets
+that layout. It does not rename units or replace the hopping table.
+
 The sing-box processes never receive `CAP_NET_ADMIN`. The installer does not enable `nftables.service` and never runs `flush ruleset`.
 
 ## State and trust boundaries

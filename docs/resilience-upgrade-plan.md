@@ -148,6 +148,9 @@ nginx 状态，不会创建第二套 unit、站点或节点。配置不一致时
 sudo scripts/publish-cloudflare-subscription.sh publish --yes
 ```
 
+若订阅里已经有 `DediOne-AnyTLS` 或 `DediOne-TUIC`，该命令会拒绝，而不是把
+Cloudflare 节点插进这条链。默认订阅不包含 Cloudflare 或 Tunnel 节点。
+
 该命令会：
 
 1. 从 Reality state 读取当前订阅与哈希，拒绝 drift；
@@ -222,23 +225,51 @@ XHTTP host 和 Host 头仍必须是 hostname。不得添加 mux/smux，不得把
 Clash/Mihomo 在 rule 模式下不能让用户手动选择 fallback 成员，这是预期行为。
 CF 只作为 `主链路` 最后一个 fallback，不使用 `url-test` 选它。
 
-## 6. sing-box 升级保持独立
+## 6. sing-box 升级保持独立，并认既有 unit 名
 
-`scripts/upgrade-sing-box.sh` 只针对已存在的 legacy sing-box 布局，使用
-`env/resilience-versions.env.example` 中独立的 `UPGRADE_SING_BOX_*` pin，
-与 CF overlay 的 Xray/Mihomo pin 不共享。不要在部署 CF overlay 的同一次
-操作里顺手升级主链内核。
+`scripts/upgrade-sing-box.sh` 只针对已存在的 legacy 布局。
+`/usr/local/bin/sing-box` 必须是普通可执行文件；fresh installer 的符号链接会被
+拒绝。它读取 `env/resilience-versions.env.example` 的 `UPGRADE_SING_BOX_*`，
+不读取 `versions.env` 的 `SING_BOX_*`。2026-11-25 核对官方稳定版后，两套 pin
+都是 v1.14.4（排除 v1.15 prerelease），校验的是同名 asset
+`sing-box-1.14.4-linux-amd64.tar.gz` 与 `sing-box-1.14.4-linux-arm64.tar.gz`，
+不是 glibc/musl 变体。不要在部署 CF overlay 的同一次操作里顺手升级主链内核。
+
+preflight 只读：它确认这些共享同一二进制的 unit 处于 active，并且只对配置做
+`check`，不改写凭据。`upgrade` 才会重启它们：
+
+- `sing-box.service` → `/etc/sing-box/config.json`
+- `sing-box-trojan.service` → `/etc/sing-box/trojan.json`
+- `sing-box-reality.service` → `/etc/sing-box/reality.json`
+- `sing-box-extra.service` → `/etc/sing-box/extra.json`（unit 已安装时必须
+  active。AnyTLS/TUIC 留在 extra.json；升级不会停掉这条 overlay，也不会跳过它）
+
+下列 unit 若已安装则必须 active。升级和回滚都不 restart/stop 它们：
+
+- `hy2-port-hopping.service`（表 `inet edge_hy2_port_hopping`）或
+  `edge-infra-port-hopping.service`（表 `inet edge_infra_hy2_hopping`）。
+  两者同时安装则拒绝。规则是 nft redirect 到 443。跳转端口没有 ss 监听是正常的。
+- `edge-infra-xray-cf.service` 使用独立 Xray 二进制，不随 sing-box 升级重启。
 
 ```sh
 sudo scripts/upgrade-sing-box.sh preflight
 sudo scripts/upgrade-sing-box.sh upgrade --yes
-# 外部验收后
+# 外部验收：主链、AnyTLS、TUIC、hopping 转发、Xray 回环仍在
 sudo scripts/upgrade-sing-box.sh commit --yes
-# 或
+# 或在 15 分钟自动回滚前
 sudo scripts/upgrade-sing-box.sh rollback --yes
 ```
 
-不要把该脚本指向真实生产环境做演练；本仓库测试只覆盖失败门禁和状态机。
+回滚只恢复 `/usr/local/bin/sing-box`，并重启本次事务记录的 sing-box unit。
+它不改 extra 凭据、不 flush nftables、不重载 nginx、不替换 Xray。自动回滚已经
+执行时，commit 会拒绝。旧版本脚本留下的进行中事务没有 unit 列表；用 rollback
+或等待它自己的 timer，不要用新脚本 commit。
+
+Xray pin 是 v26.11.9（commit `676eaf66f8f05d4d558ee7a74b4736623d3feeb9`），
+asset 为 `Xray-linux-64.zip` 与 `Xray-linux-arm64-v8a.zip`。已有 overlay state
+时再次 install 不会替换二进制或 UUID。改 pin 本身不会重装 sidecar。
+
+不要把该脚本指向真实生产环境做演练；本仓库测试只覆盖失败门禁、unit 分类和状态机。
 
 ## 7. 本地验证与已知限制
 
@@ -258,6 +289,10 @@ fallback、重复节点与覆盖拒绝、发布脚本的 `mihomo -t` 和 60 分�
 - 默认不承诺 UDP；CF 边缘 RTT 和 TLS-in-TLS 行为需真实客户端复测；
 - 回源 443 的 Cloudflare 网段限制与现有直连订阅的关系必须在生产变更前
   明确选择，代码不会自动修改防火墙；
+- `publish-cloudflare-subscription.sh` 在 AnyTLS/TUIC 已发布时拒绝。
+  这是限制，不是待放宽的缺口；不要借版本对齐把 Cloudflare 或 Tunnel 节点
+  加回默认订阅，也不要改写 extra overlay 的链序；
+- 已安装的 Xray sidecar 不会因为 pin 更新而被重装；
 - 本仓库没有、也不会从开发机执行 SSH、DNS、Cloudflare 或生产发布操作。
 
 ## 8. 禁止事项

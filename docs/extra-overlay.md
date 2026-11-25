@@ -40,6 +40,9 @@ in v1.19.4; v1.19.5 or newer recommended, validated with v1.19.33) and `tuic` v5
 
 `reality-overlay.sh` accepts the two extra nodes at the tail of `主链路` only
 while `/var/lib/edge-infra-extra/state.env` exists, and refuses a Reality
-rollback until the extra overlay is rolled back. The Cloudflare subscription
-publisher still expects the four-node chain and refuses to run while these nodes
-are published.
+rollback until the extra overlay is rolled back. `publish-cloudflare-subscription.sh`
+still requires the four-node chain Reality → Trojan → HY2 → HY2-Hop and refuses
+when `DediOne-AnyTLS` or `DediOne-TUIC` is already published. That refusal stays.
+This maintenance update does not insert `DediOne-Cloudflare` ahead of or behind
+the extra nodes, and it does not put Cloudflare or Tunnel nodes back into the
+default subscription.
